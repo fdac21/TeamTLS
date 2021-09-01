@@ -1,6 +1,6 @@
-CC=gcc
+CC=g++
 CFLAGS=-g
-DEPS = memhier.h
+DEPS = memhier.h 
 OBJ = memhier.o
 
 all: memhier
@@ -9,7 +9,7 @@ all: memhier
 	$(CC) -c -o $@ $< $(CFLAGS)
 
 memhier: memhier.o 
-	$(CC) -o $@ $^ $(CFLAGS)
+	$(CC) -o $@ $^ $(CFLAGS) -lm
 
 .PHONY: clean
 

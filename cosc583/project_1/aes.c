@@ -14,12 +14,12 @@ void printW(word w) {
 void printKey(uint8 *key, int keySize, char *str) {
 
     for (int i = 0; i < keySize; i++) {
-        sprintf(str, "%02x", key[i]);
+        printf("%02x", key[i]);
     }
-    sprintf(str, "\n");
+    printf("\n");
 }
 
-void printroundKey(word *w) {
+void printRoundKey(word *w) {
     for (int i = 0; i < Nb * (1+Nr); i++) {
         printf("Word %d: ", i);
         printW(w[i]);
@@ -103,6 +103,10 @@ void rotWord(word w) {
     }
 }
 
+void printRoundInfo(char *type, int round) {
+    printf("round[%2d].%-10s", round, type);
+}
+
 // CIPHER
 void cipher(uint8 in[4][Nb], uint8 out[4][Nb], word *w) {
     int round = 0;
@@ -110,49 +114,49 @@ void cipher(uint8 in[4][Nb], uint8 out[4][Nb], word *w) {
 
     memcpy(state, in, sizeof(uint8) * 4 * Nb);
 
-    printf("round[%2d].input      ", round);
+    printRoundInfo("input", round);
     printState(state);
     // round 0
-    printf("round[%2d].k_sch      ", round);
+    printRoundInfo("k_sch", round);
     addRoundKey(state, w, round);
 
 
     for (round = 1; round < Nr; round++) {
-        printf("round[%2d].start      ", round);
+        printRoundInfo("start ", round);
         printState(state);
 
         subBytes(state);
-        printf("round[%2d].s_box      ", round);
+        printRoundInfo("s_box", round);
         printState(state);
 
         shiftRows(state);
-        printf("round[%2d].s_row      ", round);
+        printRoundInfo("s_row", round);
         printState(state);
 
         mixColumns(state);
-        printf("round[%2d].m_col      ", round);
+        printRoundInfo("m_col", round);
         printState(state);
-        printf("round[%2d].k_sch      ", round);
+        printRoundInfo("k_sch", round);
         addRoundKey(state, w, round);
     }
 
-    printf("round[%2d].start      ", round);
+    printRoundInfo("start", round);
     printState(state);
 
     subBytes(state);
 
-    printf("round[%2d].s_box      ", round);
+    printRoundInfo("s_box", round);
     printState(state);
 
     shiftRows(state);
-    printf("round[%2d].s_row      ", round);
+    printRoundInfo("s_row", round);
     printState(state);
 
-    printf("round[%2d].k_sch      ", round);
+    printRoundInfo("k_sch", round);
     addRoundKey(state, w, round);
 
     memcpy(out, state, sizeof(uint8) * 4 * Nb);
-    printf("round[%2d].output     ", round);
+    printRoundInfo("output", round);
     printState(out);
 }
 
@@ -219,48 +223,48 @@ void invCipher(uint8 in[4][Nb], uint8 out[4][Nb], word *w) {
 
     memcpy(state, in, sizeof(uint8) * 4 *  Nb);
 
-    printf("round[%2d].iinput   ", Nr - round);
+    printRoundInfo("iinput", Nr - round);
     printState(state);
-    printf("round[%2d].ik_sch   ", Nr - round);
+    printRoundInfo("ik_sch", Nr - round);
     addRoundKey(state, w, round);
 
     for (round = Nr - 1; round > 0; round--) {
-        printf("round[%2d].istart   ", Nr - round);
+        printRoundInfo("istart", Nr - round);
         printState(state);
         
         invShiftRows(state);
-        printf("round[%2d].is_row   ", Nr - round);
+        printRoundInfo("is_row", Nr - round);
         printState(state);
 
         invSubBytes(state);
-        printf("round[%2d].is_box   ", Nr - round);
+        printRoundInfo("is_box", Nr - round);
         printState(state);
         
-        printf("round[%2d].ik_sch   ", Nr - round);
+        printRoundInfo("ik_sch", Nr - round);
         addRoundKey(state, w, round);
-        printf("round[%2d].ik_add   ", Nr - round);
+        printRoundInfo("ik_add", Nr - round);
         printState(state);
 
         invMixColumns(state);
     }
 
-    printf("round[%2d].istart   ", Nr - round);
+    printRoundInfo("istart", Nr - round);
     printState(state);
         
 
     invShiftRows(state);
-    printf("round[%2d].is_row   ", Nr - round);
+    printRoundInfo("is_row", Nr - round);
     printState(state);    
     
     invSubBytes(state);
-    printf("round[%2d].is_box   ", Nr - round);
+    printRoundInfo("is_box", Nr - round);
     printState(state);
 
-    printf("round[%2d].ik_sch   ", Nr - round);
+    printRoundInfo("ik_sch", Nr - round);
     addRoundKey(state, w, round);
 
     memcpy(out, state, sizeof(uint8) * 4 * Nb);
-    printf("round[%2d].ioutput  ", Nr - round);
+    printRoundInfo("ioutput", Nr - round);
     printState(out);
 }
 
@@ -309,18 +313,17 @@ void aes(uint8 in[4][Nb], uint8 *key, int keySize) {
     char str[100];
 
 
-    printf("PLAINTEXT:           ");
+    printf("%-20s", "PLAINTEXT:");
     printState(in);
 
-    printf("KEY:                 ");
+    printf("%-20s","KEY:");
     printKey(key, keySize, str);
-    printf("%s\n", str);
-    // printf("\n");
+    // printf("%s\n", str);
+    printf("\n");
 
     key_expansion(key, w);
     // Cipher Testing
     printf("CIPHER (ENCRYPT):\n");
-    // printState(in);
     cipher(in, out, w);
     printf("\n");
     // Inv Cipher Testing
@@ -342,6 +345,7 @@ int main(int argc, char const *argv[])
         0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
     };
 
+    printf("C.1   AES-128 (Nk=%d, Nr=%d)\n\n", Nk, Nr);
     aes(in, key_16, 16);
     printf("\n\n");
     Nk = 6;
@@ -351,6 +355,7 @@ int main(int argc, char const *argv[])
         0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
         0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
     };
+    printf("C.2   AES-192 (Nk=%d, Nr=%d)\n\n", Nk, Nr);
     aes(in, key_24, 24);
     printf("\n\n");
     Nk = 8;
@@ -360,7 +365,7 @@ int main(int argc, char const *argv[])
         0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
         0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f,
     };
-
+    printf("C.3   AES-256 (Nk=%d, Nr=%d)\n\n", Nk, Nr);
     aes(in, key_32, 32);
 
     return 0;
