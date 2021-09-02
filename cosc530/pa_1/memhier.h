@@ -27,7 +27,7 @@ public:
     uint32_t dcLineSize;
     uint32_t dcIndex;
     uint32_t dcOffset; 
-    char dcWriteThrough;
+    bool dcWriteThrough;
 
     // L2 Cache Config
     uint32_t L2Sets;
@@ -35,11 +35,11 @@ public:
     uint32_t L2LineSize;
     uint32_t L2Index;
     uint32_t L2Offset;
-    char L2WriteThrough;
+    bool L2WriteThrough;
 
-    char vAddr;
-    char tlb;
-    char L2;
+    bool vAddr;
+    bool tlb;
+    bool L2;
 
     Config(string filename);
 
@@ -47,15 +47,18 @@ public:
 };
 
 // Block
-class Block {
-private:
+struct Block {
     uint32_t address;
     uint32_t tag;
     uint32_t index;
     uint32_t offset;
+};
 
-public:
-    Block(uint32_t address); 
+struct PageTableEntry {
+    uint32_t address;
+    uint32_t vpn;
+    uint32_t ppn;
+    uint32_t offset;
 };
 
 // Set
@@ -74,7 +77,7 @@ public:
 
 class PageTable {
 private:
-    vector<Set> sets;
+    vector<PageTableEntry> entries;
 
 public:
     PageTable(Config *conf);
@@ -108,9 +111,9 @@ private:
 public:
     Cache(string source, Config *conf);
     void readSource();
-    void processData();
+    void processData(Config *conf);
 };
 
-void validateOption(char choice, string option);
+bool validateOption(char choice, string option);
 
 #endif

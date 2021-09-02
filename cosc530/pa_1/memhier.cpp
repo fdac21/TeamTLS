@@ -16,11 +16,12 @@ int main(int argc, char const *argv[])
 
     Cache* cache = new Cache("trace.dat", conf);
 
-    cache->processData();
-    printf("Virtual  Virt.  Page TLB    TLB TLB  PT   Phys        DC  DC          L2  L2\n");
-    printf("Address  Page # Off  Tag    Ind Res. Res. Pg # DC Tag Ind Res. L2 Tag Ind Res.\n");
-    printf("-------- ------ ---- ------ --- ---- ---- ---- ------ --- ---- ------ --- ----\n");
+    // printf("Virtual  Virt.  Page TLB    TLB TLB  PT   Phys        DC  DC          L2  L2\n");
+    // printf("Address  Page # Off  Tag    Ind Res. Res. Pg # DC Tag Ind Res. L2 Tag Ind Res.\n");
+    // printf("-------- ------ ---- ------ --- ---- ---- ---- ------ --- ---- ------ --- ----\n");
     // printf("%08x %6x %4x %6x %3x %4s %4s %4x %6x %3x %4s %6x %3x %4s");
+    printf("Phys Addr | Page Offset | Page Number | DC Tag | DC Index\n");
+    cache->processData(conf);
 
     delete conf;
     delete cache;
@@ -28,18 +29,20 @@ int main(int argc, char const *argv[])
     return 0;
 }
 
+/* Helper Functions */
 
-void validateOption(char choice, string option) {
+bool validateOption(char choice, string option) {
     if (choice != 'n' && choice != 'y') fprintf(stderr, "Choice for %s must be 'y' or 'n'\n", option);
+    return (choice == 'y') ? true : false;
 }
 
 uint32_t generateMask(int start, int end) {
     uint32_t mask = (end >= 32) ? -1 : (1 << end) - 1;
-    mask ^= (start <= 0) ? 0 : (1 << (start - 1)) - 1;
+    mask ^= (start <= 0) ? 0 : (1 << start) - 1;
     return mask;
 }
 
-uint32_t getIndex(uint32_t address, int start, int end) {
+uint32_t getPortion(uint32_t address, int start, int end) {
     uint32_t mask = generateMask(start, end);
     return address & mask;
 }
@@ -47,6 +50,7 @@ uint32_t getIndex(uint32_t address, int start, int end) {
 Config::Config(string filename) {
     ifstream f;
     string line;
+    char choice;
   
     f.open(filename);
     if (!f.is_open()) {
@@ -138,8 +142,8 @@ Config::Config(string filename) {
 
     // Get data cache write through option
     getline(f, line);
-    sscanf(line.c_str(), "Write through/no write allocate: %c", &this->dcWriteThrough);
-    validateOption(this->dcWriteThrough, "Data Cache Write Through");
+    sscanf(line.c_str(), "Write through/no write allocate: %c", &choice);
+    this->dcWriteThrough = validateOption(choice, "Data Cache Write Through");
 
     getline(f, line);
     getline(f, line);
@@ -158,25 +162,25 @@ Config::Config(string filename) {
 
     // Get L2 cache write through option
     getline(f, line);
-    sscanf(line.c_str(), "Write through/no write allocate: %c", &this->L2WriteThrough);
-    validateOption(this->L2WriteThrough, "L2 Cache Write Through");
+    sscanf(line.c_str(), "Write through/no write allocate: %c", &choice);
+    this->L2WriteThrough = validateOption(choice, "L2 Cache Write Through");
 
     getline(f, line);
 
     // Get V addr option
     getline(f, line);
-    sscanf(line.c_str(), "Virtual addresses: %c", &this->vAddr);
-    validateOption(this->vAddr, "Virtual Addresses");
+    sscanf(line.c_str(), "Virtual addresses: %c", &choice);
+    this->vAddr = validateOption(choice, "Virtual Addresses");
 
     // Get TLB option
     getline(f, line);
-    sscanf(line.c_str(), "TLB: %c", &this->tlb);
-    validateOption(this->tlb, "TLB");
+    sscanf(line.c_str(), "TLB: %c", &choice);
+    this->tlb = validateOption(choice, "TLB");
 
     // Get L2 option
     getline(f, line);
-    sscanf(line.c_str(), "L2 cache: %c", &this->L2);
-    validateOption(this->L2, "L2 Cache");
+    sscanf(line.c_str(), "L2 cache: %c", &choice);
+    this->L2 = validateOption(choice, "L2 Cache");
 
     // Set Page Table index and offset sizes
     this->ptIndex = log2(this->ptVPages);
@@ -239,19 +243,25 @@ DataCache::DataCache(Config *conf) {
 Cache::Cache(string filename, Config *conf) {
     this->source = filename;
     this->dc = new DataCache(conf);
+    this->pt = new PageTable(conf);
 }
 
-Block::Block(uint32_t address) {
-    this->address = address;
-    this->index = getIndex(address, 0 , 1);
+PageTableEntry *createEntry(uint32_t address, Config *conf) {
+    PageTableEntry *entry = new PageTableEntry();
+    entry->address = address;
+    entry->offset = getPortion(address, 0, conf->ptOffset);
+    entry->vpn = getPortion(address, conf->ptOffset, log2(conf->ptVPages));
+    entry->ppn = getPortion(address, conf->ptOffset, log2(conf->ptPPages));
+    return entry;
 }
 
-void Cache::processData() {
+void Cache::processData(Config *conf) {
     ifstream f;
     string line;
     char action;
     uint32_t addr;
-    Block *blk;
+    // Block *blk;
+    PageTableEntry *entry;
 
     f.open(this->source);
 
@@ -262,7 +272,6 @@ void Cache::processData() {
 
     while(getline(f, line)) {
         sscanf(line.c_str(), " %c:%x", &action, &addr);
-        blk = new Block(addr);
         printf("Perm: %c, Addr: 0x%08x  \n", action, addr);
     }
 
