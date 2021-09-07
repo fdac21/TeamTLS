@@ -11,20 +11,17 @@ using namespace std;
 
 int main(int argc, char const *argv[])
 {
-    Config* conf = new Config("old2.config");
-    conf->printConfig();
 
-    Cache* cache = new Cache("trace.dat", conf);
-
+    Memory* mem = new Memory("old2.config");
+    // mem->printConfig();
     // printf("Virtual  Virt.  Page TLB    TLB TLB  PT   Phys        DC  DC          L2  L2\n");
     // printf("Address  Page # Off  Tag    Ind Res. Res. Pg # DC Tag Ind Res. L2 Tag Ind Res.\n");
     // printf("-------- ------ ---- ------ --- ---- ---- ---- ------ --- ---- ------ --- ----\n");
     // printf("%08x %6x %4x %6x %3x %4s %4s %4x %6x %3x %4s %6x %3x %4s");
     printf("Phys Addr | Page Offset | Page Number | DC Tag | DC Index\n");
-    cache->processData(conf);
+    mem->processData("trace.dat");
 
-    delete conf;
-    delete cache;
+    delete mem;
 
     return 0;
 }
@@ -36,15 +33,15 @@ bool validateOption(char choice, string option) {
     return (choice == 'y') ? true : false;
 }
 
-uint32_t generateMask(int start, int end) {
-    uint32_t mask = (end >= 32) ? -1 : (1 << end) - 1;
+uint64_t generateMask(int start, int end) {
+    uint64_t mask = (end >= 48) ? 0xffffff : (1 << end) - 1;
     mask ^= (start <= 0) ? 0 : (1 << start) - 1;
     return mask;
 }
 
-uint32_t getPortion(uint32_t address, int start, int end) {
-    uint32_t mask = generateMask(start, end);
-    return address & mask;
+uint64_t getPortion(uint64_t address, int start, int end) {
+    uint64_t mask = generateMask(start, end);
+    return (address & mask) >> start;
 }
 
 Config::Config(string filename) {
@@ -187,11 +184,11 @@ Config::Config(string filename) {
     this->ptOffset = log2(this->ptPageSize);
 
     // Set Data Cache index and offset sizes
-    this->dcIndex = log2(this->dcSets);
+    this->dcIndex = log2(this->dcSets / this->dcSetSize);
     this->dcOffset = log2(this->dcLineSize);
     
     // Set L2 index and offset sizes
-    this->L2Index = log2(this->L2Sets);
+    this->L2Index = log2(this->L2Sets / this->L2SetSize);
     this->L2Offset = log2(this->L2LineSize);
 
     f.close();    
@@ -234,36 +231,51 @@ void Config::printConfig() {
 }
 
 DataCache::DataCache(Config *conf) {
-    this->sets.resize(conf->dcSets);
-    for (int i = 0; i < conf->dcSets; i++) {
-        this->sets.at(i).blocks.resize(conf->dcSetSize);
+    this->nSets = conf->dcSets;
+    this->setSize = conf->dcSetSize;
+    this->lineSize = conf->dcLineSize;
+    this->offset = conf->dcOffset;
+    this->index = conf->dcIndex + conf->dcOffset;
+    this->writeThrough = conf->dcWriteThrough;
+    this->sets.resize(nSets);
+    for (int i = 0; i < this->nSets; i++) {
+        this->sets.at(i).blocks.resize(setSize);
     }
 }
 
-Cache::Cache(string filename, Config *conf) {
-    this->source = filename;
+L2Cache::L2Cache(Config *conf) {
+    this->nSets = conf->dcSets;
+    this->setSize = conf->dcSetSize;
+    this->lineSize = lineSize;
+    this->writeThrough = writeThrough;
+    this->active = conf->L2;
+    if (this->active) {
+        this->sets.resize(this->nSets);
+        for (int i = 0; i < this->nSets; i++) {
+            this->sets.at(i).blocks.resize(this->setSize);
+        }
+    }
+}
+
+Memory::Memory(string configFile) {
+    this->conf = new Config(configFile);
     this->dc = new DataCache(conf);
     this->pt = new PageTable(conf);
 }
 
-PageTableEntry *createEntry(uint32_t address, Config *conf) {
-    PageTableEntry *entry = new PageTableEntry();
-    entry->address = address;
-    entry->offset = getPortion(address, 0, conf->ptOffset);
-    entry->vpn = getPortion(address, conf->ptOffset, log2(conf->ptVPages));
-    entry->ppn = getPortion(address, conf->ptOffset, log2(conf->ptPPages));
-    return entry;
-}
-
-void Cache::processData(Config *conf) {
+void Memory::processData(string source) {
     ifstream f;
     string line;
     char action;
-    uint32_t addr;
-    // Block *blk;
+    uint64_t addr;
+    uint64_t offset;
+    uint64_t pageNumber;
+    uint64_t index;
+    uint64_t tag;
+    Block *blk;
     PageTableEntry *entry;
 
-    f.open(this->source);
+    f.open(source);
 
     if (!f.is_open()) {
         perror("Error opening config file.\n");
@@ -272,8 +284,32 @@ void Cache::processData(Config *conf) {
 
     while(getline(f, line)) {
         sscanf(line.c_str(), " %c:%x", &action, &addr);
-        printf("Perm: %c, Addr: 0x%08x  \n", action, addr);
+        offset = getPortion(addr, 0, this->conf->ptOffset);
+        pageNumber = getPortion(addr, this->conf->ptOffset, this->conf->ptIndex + this->conf->ptOffset);
+        index = getPortion(addr, this->dc->offset, this->dc->index);
+        tag = getPortion(addr, this->dc->index, 64);
+        blk = createBlock(addr, offset, index, tag);
+        printf("%08x  | %-11x | %-11x | %-6x | %x \n", blk->address, blk->offset, pageNumber, blk->tag, blk->index);
+        delete blk;
     }
 
     f.close();
+}
+
+Block *createBlock(uint64_t addr, uint64_t offset, uint64_t index, uint64_t tag) {
+    Block *blk = new Block();
+    blk->address = addr;
+    blk->offset = offset;
+    blk->index = index;
+    blk->tag = tag;
+    return blk;
+}
+
+PageTableEntry *createEntry(uint64_t address, Config *conf) {
+    PageTableEntry *entry = new PageTableEntry();
+    entry->address = address;
+    entry->offset = getPortion(address, 0, conf->ptOffset);
+    entry->vpn = getPortion(address, conf->ptOffset, log2(conf->ptVPages));
+    entry->ppn = getPortion(address, conf->ptOffset, log2(conf->ptPPages));
+    return entry;
 }

@@ -11,30 +11,30 @@ using std::vector;
 // Config
 class Config {
 public:
-    uint32_t tlbSets;
-    uint32_t tlbSetSize;
+    uint64_t tlbSets;
+    uint64_t tlbSetSize;
 
     // Page Table Config
-    uint32_t ptVPages;
-    uint32_t ptPPages;
-    uint32_t ptPageSize;
-    uint32_t ptIndex;
-    uint32_t ptOffset;
+    uint64_t ptVPages;
+    uint64_t ptPPages;
+    uint64_t ptPageSize;
+    uint64_t ptIndex;
+    uint64_t ptOffset;
 
     // Data Cache Config
-    uint32_t dcSets;
-    uint32_t dcSetSize;
-    uint32_t dcLineSize;
-    uint32_t dcIndex;
-    uint32_t dcOffset; 
+    uint64_t dcSets;
+    uint64_t dcSetSize;
+    uint64_t dcLineSize;
+    uint64_t dcIndex;
+    uint64_t dcOffset; 
     bool dcWriteThrough;
 
     // L2 Cache Config
-    uint32_t L2Sets;
-    uint32_t L2SetSize;
-    uint32_t L2LineSize;
-    uint32_t L2Index;
-    uint32_t L2Offset;
+    uint64_t L2Sets;
+    uint64_t L2SetSize;
+    uint64_t L2LineSize;
+    uint64_t L2Index;
+    uint64_t L2Offset;
     bool L2WriteThrough;
 
     bool vAddr;
@@ -48,17 +48,17 @@ public:
 
 // Block
 struct Block {
-    uint32_t address;
-    uint32_t tag;
-    uint32_t index;
-    uint32_t offset;
+    uint64_t address;
+    uint64_t tag;
+    uint64_t index;
+    uint64_t offset;
 };
 
 struct PageTableEntry {
-    uint32_t address;
-    uint32_t vpn;
-    uint32_t ppn;
-    uint32_t offset;
+    uint64_t address;
+    uint64_t vpn;
+    uint64_t ppn;
+    uint64_t offset;
 };
 
 // Set
@@ -84,36 +84,48 @@ public:
 };
 
 class DataCache {
-private:
+protected:
     vector<Set> sets;
+    int nSets;
+    int setSize;
+    int lineSize;
+    bool writeThrough;
 
 public:
+    int offset;
+    int index;
     DataCache(Config *conf);
+    void initFrame();
 };
 
 class L2Cache {
-private:
     vector<Set> sets;
-
+    int nSets;
+    int setSize;
+    int lineSize;
+    bool writeThrough;
 public:
+    bool active;
     L2Cache(Config *conf);
 };
 
 // Cache 
-class Cache {
+class Memory {
 private:
-    string source;
+    Config *conf;
     DataCache *dc;
     PageTable *pt;
     TLB *tlb;
     L2Cache *L2;
 
 public:
-    Cache(string source, Config *conf);
-    void readSource();
-    void processData(Config *conf);
+    Memory(string configFile);
+    void processData(string source);
+    void printConfig() {this->conf->printConfig();};
 };
 
 bool validateOption(char choice, string option);
+
+Block *createBlock(uint64_t addr, uint64_t offset, uint64_t index, uint64_t tag);
 
 #endif

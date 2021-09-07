@@ -244,7 +244,6 @@ void invCipher(uint8 in[4][Nb], uint8 out[4][Nb], word *w) {
         addRoundKey(state, w, round);
         printRoundInfo("ik_add", Nr - round);
         printState(state);
-
         invMixColumns(state);
     }
 
