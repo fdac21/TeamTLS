@@ -6,6 +6,7 @@
 #include <string>
 #include <iostream>
 #include <fstream>
+#include <algorithm>
 
 using namespace std;
 
@@ -238,9 +239,61 @@ DataCache::DataCache(Config *conf) {
     this->index = conf->dcIndex + conf->dcOffset;
     this->writeThrough = conf->dcWriteThrough;
     this->sets.resize(nSets);
+
+
     for (int i = 0; i < this->nSets; i++) {
-        this->sets.at(i).blocks.resize(setSize);
+        this->sets.at(i) = new Set();
+        this->sets.at(i)->blocks.reserve(setSize);
     }
+}
+
+
+void replaceBlock(vector<Block *> *set, Block *blk) {
+
+}
+
+// TODO: Make sure sets doesn't need to be a vector of pointers
+bool DataCache::processBlock(Block *blk) {
+    Set *s = NULL;
+    Block  *resident = NULL;
+    // cout << this->setSize << endl;
+    // cout << hex << blk->index << endl;
+
+    s = this->sets.at(blk->index % this->nSets);
+
+    // If there's a free block, insert the block
+    if (s->blocks.size() < this->setSize) {
+        s->blocks.insert(s->blocks.begin(), blk);
+    } else {
+        for (int i = 0; i < s->blocks.size(); i++) {
+            resident = s->blocks.at(i);
+            // If there's a block with matching index and tag
+            if (resident->tag == blk->tag) {
+                return true;
+            } 
+            // If there's not a matching block
+            else {
+                // If the cache is direct mapped
+                if (this->setSize == 1) {
+                    s->blocks.at(i) = blk;
+                    
+                    delete resident;
+                } 
+                // Otherwise LRU 
+                else {
+                    // cout << hex << blk->offset << endl;
+                    s->blocks.pop_back();
+                    s->blocks.insert(s->blocks.begin(), blk);
+                }
+
+                break;
+            }
+
+        }
+
+    }
+
+    return false;
 }
 
 L2Cache::L2Cache(Config *conf) {
@@ -252,7 +305,7 @@ L2Cache::L2Cache(Config *conf) {
     if (this->active) {
         this->sets.resize(this->nSets);
         for (int i = 0; i < this->nSets; i++) {
-            this->sets.at(i).blocks.resize(this->setSize);
+            this->sets.at(i).blocks.reserve(this->setSize);
         }
     }
 }
@@ -260,7 +313,7 @@ L2Cache::L2Cache(Config *conf) {
 Memory::Memory(string configFile) {
     this->conf = new Config(configFile);
     this->dc = new DataCache(conf);
-    this->pt = new PageTable(conf);
+    // this->pt = new PageTable(conf);
 }
 
 void Memory::processData(string source) {
@@ -283,16 +336,39 @@ void Memory::processData(string source) {
     }
 
     while(getline(f, line)) {
+        blk = NULL;
+
         sscanf(line.c_str(), " %c:%x", &action, &addr);
         offset = getPortion(addr, 0, this->conf->ptOffset);
         pageNumber = getPortion(addr, this->conf->ptOffset, this->conf->ptIndex + this->conf->ptOffset);
         index = getPortion(addr, this->dc->offset, this->dc->index);
         tag = getPortion(addr, this->dc->index, 64);
-        blk = createBlock(addr, offset, index, tag);
-        printf("%08x  | %-11x | %-11x | %-6x | %x \n", blk->address, blk->offset, pageNumber, blk->tag, blk->index);
-        delete blk;
-    }
 
+        blk = createBlock(addr, offset, index, tag);
+
+        if(this->dc->processBlock(blk)) {
+            printf("%08x  | %-11x | %-11x | %-6x | %x | hit \n", blk->address, blk->offset, pageNumber, blk->tag, blk->index);
+            delete blk;
+        } else {
+            printf("%08x  | %-11x | %-11x | %-6x | %x | miss \n", blk->address, blk->offset, pageNumber, blk->tag, blk->index);
+        }
+        // delete blk;
+        // printf("%08x  | %-11x | %-11x | %-6x | %x \n", blk->address, blk->offset, pageNumber, blk->tag, blk->index);
+
+
+    }
+    for (int i = 0; i < this->dc->sets.size(); i++) {
+        // cout << i << endl;
+        for (int j = 0; j < this->dc->sets.at(i)->blocks.size(); j++) {
+            blk = this->dc->sets.at(i)->blocks.at(j);
+            if (blk != NULL) {
+                printf("%08x  | %-11x | %-11x | %-6x | %x \n", blk->address, blk->offset, pageNumber, blk->tag, blk->index);
+                delete blk;
+            }
+
+            blk = NULL;
+        }
+    }
     f.close();
 }
 

@@ -9,6 +9,10 @@
     "string_view": "cpp",
     "initializer_list": "cpp",
     "utility": "cpp",
-    "fstream": "cpp"
+    "fstream": "cpp",
+    "iostream": "cpp",
+    "ostream": "cpp",
+    "new": "cpp",
+    "*.tcc": "cpp"
   }
 }

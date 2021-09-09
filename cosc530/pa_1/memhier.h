@@ -64,12 +64,12 @@ struct PageTableEntry {
 // Set
 class Set {
 public:
-    vector<Block> blocks;    
+    vector<Block *> blocks;    
 };
 
 class TLB {
 private:
-    vector<Set> sets;
+    vector<Set *> sets;
 
 public:
     TLB(Config *conf);
@@ -85,7 +85,6 @@ public:
 
 class DataCache {
 protected:
-    vector<Set> sets;
     int nSets;
     int setSize;
     int lineSize;
@@ -94,8 +93,11 @@ protected:
 public:
     int offset;
     int index;
+    vector<Set *> sets;
+
     DataCache(Config *conf);
     void initFrame();
+    bool processBlock(Block *blk);
 };
 
 class L2Cache {
