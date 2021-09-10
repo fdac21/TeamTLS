@@ -245,6 +245,9 @@ DataCache::DataCache(Config *conf) {
         this->sets.at(i) = new Set();
         this->sets.at(i)->blocks.reserve(setSize);
     }
+
+    this->hits = 0;
+    this->misses = 0;
 }
 
 
@@ -269,6 +272,7 @@ bool DataCache::processBlock(Block *blk) {
             resident = s->blocks.at(i);
             // If there's a block with matching index and tag
             if (resident->tag == blk->tag) {
+                this->hits++;
                 return true;
             } 
             // If there's not a matching block
@@ -292,7 +296,7 @@ bool DataCache::processBlock(Block *blk) {
         }
 
     }
-
+    this->misses++;
     return false;
 }
 
@@ -369,6 +373,9 @@ void Memory::processData(string source) {
             blk = NULL;
         }
     }
+    cout << "Hits: " << this->dc->hits << endl;
+    cout << "Misses: " << this->dc->misses << endl;
+    printf("Hit Ratio: %.6f\n", (float) this->dc->hits / (float) (this->dc->hits + this->dc->misses));
     f.close();
 }
 

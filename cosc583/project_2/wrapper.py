@@ -30,11 +30,12 @@ def collision() -> None:
     tries = 0
 
     for bit in bits:
-        base = ranString(25)
-        res = sha256w(base, bit)
+        
         while True:
             tries += 1
             alt = ranString(25)
+            base = ranString(25)
+            res = sha256w(base, bit)
             test = sha256w(alt, bit)
             if res == test:
                 break
@@ -48,20 +49,20 @@ def preImage() -> None:
     tries = 0
 
     for bit in bits:
-        base = ranString(1)
+        base = ranString(15)
         res = sha256w(base, bit)
         while True:
             tries += 1
-            alt = ranString(1)
+            alt = ranString(15)
             test = sha256w(alt, bit)
-            if res == test and base == alt:
+            if res == test:
                 break
         print(
             f"Pre-image attack with bit length {bit} took {tries} tries")
         tries = 0
 
 
-# collision()
+collision()
 preImage()
 
 # sha256w("TEST", 32)

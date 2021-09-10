@@ -90,9 +90,12 @@ protected:
     int lineSize;
     bool writeThrough;
 
+
 public:
     int offset;
     int index;
+    int hits;
+    int misses;
     vector<Set *> sets;
 
     DataCache(Config *conf);
@@ -121,6 +124,8 @@ private:
     L2Cache *L2;
 
 public:
+    int reads;
+    int writes;
     Memory(string configFile);
     void processData(string source);
     void printConfig() {this->conf->printConfig();};
