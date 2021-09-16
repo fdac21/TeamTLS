@@ -1,7 +1,10 @@
-from hashlib import sha256
 import random
+import csv
 from string import ascii_letters, digits
+from hashlib import sha256
 import numpy as np
+import plotly.express as px
+
 
 ALPHANUM: str = ascii_letters + digits
 
@@ -32,10 +35,10 @@ def collision() -> dict[int, list[int]]:
     tries = 0
 
     for size in bits.keys():
-        for i in range(50):
+        for i in range(75):
             base = ranString(25)
             res = sha256w(base, size)
-            hashes.append(res)
+            hashes = [res]
 
             while True:
                 tries += 1
@@ -58,7 +61,7 @@ def preImage() -> dict[int, list[int]]:
     tries = 0
 
     for size in bits.keys():
-        for i in range(50):
+        for i in range(75):
             base = ranString(25)
             res = sha256w(base, size)
             while True:
@@ -78,9 +81,21 @@ def preImage() -> dict[int, list[int]]:
 col_trials = collision()
 pre_trials = preImage()
 
-for trial in col_trials.keys():
-    print(
-        f"Collision avg for bit size {trial}: {np.mean(col_trials[trial])}")
-    print(
-        f"Pre-image avg for bit size {trial}: {np.mean(pre_trials[trial])}")
-# sha256w("TEST", 32)
+with open('trial_results.csv', 'w') as f:
+    writer = csv.writer(f)
+    writer.writerow(['Collision Attack Results for 75 Trials'])
+    writer.writerow(['Bit Size', 'Avg Iterations'])
+    for size, results in col_trials.items():
+        writer.writerow([size, np.mean(results), *results])
+        print(
+            f"Collision avg for bit size {size}: {np.mean(results)}")
+
+    writer.writerow(['Pre-Image Attack Results for 75 Trials'])
+    writer.writerow(['Bit Size', 'Avg Iterations'])
+    for size, results in pre_trials.items():
+        writer.writerow([size, np.mean(results), *results])
+        print(
+            f"Pre-image avg for bit size {size}: {np.mean(results)}")
+
+
+px.violin()
