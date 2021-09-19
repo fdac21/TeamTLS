@@ -45,6 +45,16 @@ uint64_t getPortion(uint64_t address, int start, int end) {
     return (address & mask) >> start;
 }
 
+template <typename T> void move(vector<T>& v, size_t oldIndex, size_t newIndex)
+{
+    if (oldIndex > newIndex)
+        std::rotate(v.rend() - oldIndex - 1, v.rend() - oldIndex, v.rend() - newIndex);
+    else        
+        std::rotate(v.begin() + oldIndex, v.begin() + oldIndex + 1, v.begin() + newIndex + 1);
+}
+
+/* End Helper Functions */
+
 Config::Config(string filename) {
     ifstream f;
     string line;
@@ -185,11 +195,11 @@ Config::Config(string filename) {
     this->ptOffset = log2(this->ptPageSize);
 
     // Set Data Cache index and offset sizes
-    this->dcIndex = log2(this->dcSets / this->dcSetSize);
+    this->dcIndex = log2(this->dcSets);
     this->dcOffset = log2(this->dcLineSize);
     
     // Set L2 index and offset sizes
-    this->L2Index = log2(this->L2Sets / this->L2SetSize);
+    this->L2Index = log2(this->L2Sets);
     this->L2Offset = log2(this->L2LineSize);
 
     f.close();    
@@ -240,7 +250,6 @@ DataCache::DataCache(Config *conf) {
     this->writeThrough = conf->dcWriteThrough;
     this->sets.resize(nSets);
 
-
     for (int i = 0; i < this->nSets; i++) {
         this->sets.at(i) = new Set();
         this->sets.at(i)->blocks.reserve(setSize);
@@ -250,13 +259,23 @@ DataCache::DataCache(Config *conf) {
     this->misses = 0;
 }
 
-
-void replaceBlock(vector<Block *> *set, Block *blk) {
-
+void DataCache::replaceBlock(Set *s, int i, Block *blk, Block *resident) {
+     // If the cache is direct mapped
+    if (this->setSize == 1) {
+        s->blocks.at(i) = blk;
+        
+        delete resident;
+    } 
+    // Otherwise LRU 
+    else {
+        // cout << hex << blk->offset << endl;
+        s->blocks.pop_back();
+        s->blocks.insert(s->blocks.begin(), blk);
+    }
 }
 
 // TODO: Make sure sets doesn't need to be a vector of pointers
-bool DataCache::processBlock(Block *blk) {
+bool DataCache::processBlock(Block *blk, char action) {
     Set *s = NULL;
     Block  *resident = NULL;
     // cout << this->setSize << endl;
@@ -266,6 +285,18 @@ bool DataCache::processBlock(Block *blk) {
 
     // If there's a free block, insert the block
     if (s->blocks.size() < this->setSize) {
+        for (int i = 0; i < s->blocks.size(); i++) {
+            resident = s->blocks.at(i);
+
+            if (resident->tag == blk->tag) {
+                this->hits++;
+                // Update cache on write if there is a hit
+                if (action == 'W') this->replaceBlock(s, i, blk, resident);
+                // Move the block to the front of the set on a read hit
+                else move(s->blocks, i, 0);
+                return true;
+            } 
+        }
         s->blocks.insert(s->blocks.begin(), blk);
     } else {
         for (int i = 0; i < s->blocks.size(); i++) {
@@ -273,24 +304,19 @@ bool DataCache::processBlock(Block *blk) {
             // If there's a block with matching index and tag
             if (resident->tag == blk->tag) {
                 this->hits++;
+                // Update cache on write if there is a hit
+                if (action == 'W') this->replaceBlock(s, i, blk, resident);
+                // Move the block to the front of the set on a read hit
+                else move(s->blocks, i, 0);
                 return true;
             } 
-            // If there's not a matching block
+            // If there's not a matching block then it's a miss 
             else {
-                // If the cache is direct mapped
-                if (this->setSize == 1) {
-                    s->blocks.at(i) = blk;
-                    
-                    delete resident;
-                } 
-                // Otherwise LRU 
-                else {
-                    // cout << hex << blk->offset << endl;
-                    s->blocks.pop_back();
-                    s->blocks.insert(s->blocks.begin(), blk);
+                // If this is a read or write-back is the active policiy, update the cache
+                if (action == 'R' || !this->writeThrough) {
+                    this->replaceBlock(s, i, blk, resident);
+                    break;
                 }
-
-                break;
             }
 
         }
@@ -301,27 +327,101 @@ bool DataCache::processBlock(Block *blk) {
 }
 
 L2Cache::L2Cache(Config *conf) {
-    this->nSets = conf->dcSets;
-    this->setSize = conf->dcSetSize;
-    this->lineSize = lineSize;
-    this->writeThrough = writeThrough;
+    this->nSets = conf->L2Sets;
+    this->setSize = conf->L2SetSize;
+    this->lineSize = conf->L2LineSize;
+    this->offset = conf->L2Offset;
+    this->index = conf->L2Index + conf->L2Offset;
+
+    this->writeThrough = conf->L2WriteThrough;
     this->active = conf->L2;
+
     if (this->active) {
         this->sets.resize(this->nSets);
         for (int i = 0; i < this->nSets; i++) {
-            this->sets.at(i).blocks.reserve(this->setSize);
+            this->sets.at(i) = new Set();
+            this->sets.at(i)->blocks.reserve(setSize);
         }
     }
+
+    this->hits = 0;
+    this->misses = 0;
+}
+
+void L2Cache::replaceBlock(Set *s, int i, Block *blk, Block *resident) {
+     // If the cache is direct mapped
+    if (this->setSize == 1) {
+        s->blocks.at(i) = blk;
+        
+        delete resident;
+    } 
+    // Otherwise LRU 
+    else {
+        s->blocks.pop_back();
+        s->blocks.insert(s->blocks.begin(), blk);
+    }
+}
+
+// TODO: Make sure sets doesn't need to be a vector of pointers
+bool L2Cache::processBlock(Block *blk, char action) {
+    Set *s = NULL;
+    Block  *resident = NULL;
+    // cout << hex << blk->index << endl;
+
+    s = this->sets.at(blk->index % this->nSets);
+
+    // If there's a free block, insert the block
+    if (s->blocks.size() < this->setSize) {
+        for (int i = 0; i < s->blocks.size(); i++) {
+            resident = s->blocks.at(i);
+
+            if (resident->tag == blk->tag) {
+                this->hits++;
+                // Update cache on write if there is a hit
+                if (action == 'W') this->replaceBlock(s, i, blk, resident);
+                // Move the block to the front of the set on a read hit
+                else move(s->blocks, i, 0);
+                return true;
+            } 
+        }
+        s->blocks.insert(s->blocks.begin(), blk);
+    } else {
+
+        for (int i = 0; i < s->blocks.size(); i++) {
+            resident = s->blocks.at(i);
+            // If there's a block with matching index and tag
+            if (resident->tag == blk->tag) {
+                this->hits++;
+                // Update cache on write if there is a hit
+                if (action == 'W') this->replaceBlock(s, i, blk, resident);
+                // Move the block to the front of the set on a read hit
+                else move(s->blocks, i, 0);
+                return true;
+            } 
+            // If there's not a matching block then it's a miss 
+            else {
+                // If this is a read or write-back is the active policiy, update the cache
+                if (action == 'R' || !this->writeThrough) {
+                    this->replaceBlock(s, i, blk, resident);
+                    break;
+                }
+            }
+
+        }
+
+    }
+    this->misses++;
+    return false;
 }
 
 Memory::Memory(string configFile) {
     this->conf = new Config(configFile);
     this->dc = new DataCache(conf);
+    this->L2 = new L2Cache(conf);
     // this->pt = new PageTable(conf);
 }
 
 void Memory::processData(string source) {
-    ifstream f;
     string line;
     char action;
     uint64_t addr;
@@ -329,17 +429,11 @@ void Memory::processData(string source) {
     uint64_t pageNumber;
     uint64_t index;
     uint64_t tag;
+    bool dcHit;
     Block *blk;
     PageTableEntry *entry;
 
-    f.open(source);
-
-    if (!f.is_open()) {
-        perror("Error opening config file.\n");
-        exit(-1);
-    }
-
-    while(getline(f, line)) {
+    while(cin >> line) {
         blk = NULL;
 
         sscanf(line.c_str(), " %c:%x", &action, &addr);
@@ -350,33 +444,51 @@ void Memory::processData(string source) {
 
         blk = createBlock(addr, offset, index, tag);
 
-        if(this->dc->processBlock(blk)) {
-            printf("%08x  | %-11x | %-11x | %-6x | %x | hit \n", blk->address, blk->offset, pageNumber, blk->tag, blk->index);
-            delete blk;
+        if ((dcHit = this->dc->processBlock(blk, action))) {
+            printf("%08x  | %-11x | %-11x | %-6x | %x | hit  ", blk->address, blk->offset, pageNumber, blk->tag, blk->index);
         } else {
-            printf("%08x  | %-11x | %-11x | %-6x | %x | miss \n", blk->address, blk->offset, pageNumber, blk->tag, blk->index);
+            printf("%08x  | %-11x | %-11x | %-6x | %x | miss ", blk->address, blk->offset, pageNumber, blk->tag, blk->index);
         }
+
+
+        if (this->conf->L2 && !dcHit) {
+            index = getPortion(addr, this->L2->offset, this->L2->index);
+            tag = getPortion(addr, this->L2->index, 64);
+            blk = createBlock(addr, offset, index, tag);
+
+            if (this->L2->processBlock(blk, action)) {
+                printf("| %-6x | %x | hit  \n", blk->tag, blk->index);
+            } else {
+                printf("| %-6x | %x | miss \n", blk->tag, blk->index);
+            }
+        } else {
+            printf("| %-6s | %s |     \n", " ", " ");
+        }
+
         // delete blk;
         // printf("%08x  | %-11x | %-11x | %-6x | %x \n", blk->address, blk->offset, pageNumber, blk->tag, blk->index);
 
 
     }
-    for (int i = 0; i < this->dc->sets.size(); i++) {
-        // cout << i << endl;
-        for (int j = 0; j < this->dc->sets.at(i)->blocks.size(); j++) {
-            blk = this->dc->sets.at(i)->blocks.at(j);
-            if (blk != NULL) {
-                printf("%08x  | %-11x | %-11x | %-6x | %x \n", blk->address, blk->offset, pageNumber, blk->tag, blk->index);
-                delete blk;
-            }
+    // for (int i = 0; i < this->dc->sets.size(); i++) {
+    //     // cout << i << endl;
+    //     for (int j = 0; j < this->dc->sets.at(i)->blocks.size(); j++) {
+    //         blk = this->dc->sets.at(i)->blocks.at(j);
+    //         if (blk != NULL) {
+    //             printf("%08x  | %-11x | %-11x | %-6x | %x \n", blk->address, blk->offset, pageNumber, blk->tag, blk->index);
+    //             delete blk;
+    //         }
 
-            blk = NULL;
-        }
-    }
-    cout << "Hits: " << this->dc->hits << endl;
-    cout << "Misses: " << this->dc->misses << endl;
-    printf("Hit Ratio: %.6f\n", (float) this->dc->hits / (float) (this->dc->hits + this->dc->misses));
-    f.close();
+    //         blk = NULL;
+    //     }
+    // }
+
+    cout << "DC Hits: " << this->dc->hits << endl;
+    cout << "DC Misses: " << this->dc->misses << endl;
+    printf("DC Hit Ratio: %.6f\n", (float) this->dc->hits / (float) (this->dc->hits + this->dc->misses));
+    cout << "L2 Hits: " << this->L2->hits << endl;
+    cout << "L2 Misses: " << this->L2->misses << endl;
+    printf("L2 Hit Ratio: %.6f\n", (float) this->L2->hits / (float) (this->L2->hits + this->L2->misses));
 }
 
 Block *createBlock(uint64_t addr, uint64_t offset, uint64_t index, uint64_t tag) {

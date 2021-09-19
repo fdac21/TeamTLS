@@ -1,1 +1,20 @@
 read at 00000c84
+
+read at 0000081c
+
+read at 0000014c
+
+read at 00000c84
+
+read at 00000400
+
+read at 00000148
+
+read at 00000144
+
+read at 00000c80
+
+read at 00000008
+invalidating DC line with tag 4 and index 1 since phys page 1 is being replaced
+invalidating L2 line with tag 1 and index 1 since phys page 1 is being replaced
+

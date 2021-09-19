@@ -52,6 +52,8 @@ struct Block {
     uint64_t tag;
     uint64_t index;
     uint64_t offset;
+    int dirty;
+    bool valid;
 };
 
 struct PageTableEntry {
@@ -100,18 +102,27 @@ public:
 
     DataCache(Config *conf);
     void initFrame();
-    bool processBlock(Block *blk);
+    void replaceBlock(Set *s, int i, Block *blk, Block *resident);
+    bool processBlock(Block *blk, char action);
 };
 
 class L2Cache {
-    vector<Set> sets;
+    vector<Set *> sets;
     int nSets;
     int setSize;
     int lineSize;
     bool writeThrough;
+
 public:
     bool active;
+    int hits;
+    int misses;
+    int offset;
+    int index;
     L2Cache(Config *conf);
+    void initFrame();
+    void replaceBlock(Set *s, int i, Block *blk, Block *resident);
+    bool processBlock(Block *blk, char action);
 };
 
 // Cache 
