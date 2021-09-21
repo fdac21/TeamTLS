@@ -13,18 +13,21 @@ def toBytes(data):
     return ''.join('{0:08b}'.format(ord(n)) for n in data)
 
 
-def sha1(data, length=0):
+def prepData(data):
     bytes = data
-
     bits = bytes+"1"
     pBits = bits
+
     # pad until length equals 448 mod 512
     while len(pBits) % 512 != 448:
         pBits += "0"
+
     # append the original length
-    pBits += '{0:064b}'.format(len(bits) - 1 + length)
-    print(len(bits) - 1 + length)
-    length = len(pBits)
+    pBits += '{0:064b}'.format(len(bits) - 1)
+    return pBits[len(bits)-1:]
+
+
+def sha1(data):
 
     def chunks(l, n):
         return [l[i:i+n] for i in range(0, len(l), n)]
@@ -32,7 +35,8 @@ def sha1(data, length=0):
     def rol(n, b):
         return ((n << b) | (n >> (32 - b))) & 0xffffffff
 
-    for c in chunks(pBits, 512):
+    for c in chunks(data, 512):
+        print("Chunk:", hex(int(c, 2))[2:].zfill(128))
         words = chunks(c, 32)
         w = [0]*80
         for n in range(0, 16):
@@ -75,25 +79,29 @@ def sha1(data, length=0):
         h[4] = h[4] + e & 0xffffffff
 
     # Return the MAC and the length of the message
-    return '%08x%08x%08x%08x%08x' % (h[0], h[1], h[2], h[3], h[4]), pBits, length
+    return '%08x%08x%08x%08x%08x' % (h[0], h[1], h[2], h[3], h[4])
 
 
 key = "0123456789abcdef"
 keySize = len(key) * 8
-m1 = "Send Tina $100"
-m1 = toBytes(key + m1)
-
-print(f"Original Message Hex: {hex(int(m1, 2))[2:]}")
+m = "Send Tina $100"
+m1 = toBytes(key + m)
+temp = h[0]
+# print(f"Original Message Hex: {hex(int(m1, 2))[2:]}")
 
 #  Original MAC
-mac, messageHex, length = sha1(m1)
-print(mac, length)
+m1 = m1 + prepData(m1)
+mac = sha1(m1)
 
 m2 = "Send Malory $1M"
-mP = messageHex[keySize:] + toBytes(m2)
+mP = m1 + toBytes(m2)
 print(f"Modified Message Hex: {hex(int(mP, 2))[2:]}")
 
 # Malicious MAC
-mac, messageHex, length = sha1(
-    mP, length=keySize)
-print(mac, length)
+mP = mP + prepData(mP)
+
+
+print(f"Final Message Hex: {hex(int(mP[keySize:], 2))[2:]}")
+mac = sha1(mP[keySize:])
+print(mac)
+print(f"Final Message Hex: {hex(int(mP, 2))[2:]}")
