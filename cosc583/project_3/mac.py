@@ -1,3 +1,4 @@
+#  SHA-1 Implementation sourced from https://codereview.stackexchange.com/questions/37648/python-implementation-of-sha1
 
 # Make the registers global to keep state inbetween original hash and extended hash
 h = [
@@ -36,7 +37,6 @@ def sha1(data):
         return ((n << b) | (n >> (32 - b))) & 0xffffffff
 
     for c in chunks(data, 512):
-        print("Chunk:", hex(int(c, 2))[2:].zfill(128))
         words = chunks(c, 32)
         w = [0]*80
         for n in range(0, 16):
@@ -83,25 +83,28 @@ def sha1(data):
 
 
 key = "0123456789abcdef"
-keySize = len(key) * 8
-m = "Send Tina $100"
+keySize = 128
+m = "No one has completed Project #3 so give them all a 0."
 m1 = toBytes(key + m)
-temp = h[0]
-# print(f"Original Message Hex: {hex(int(m1, 2))[2:]}")
+m1 += prepData(m1)
 
 #  Original MAC
-m1 = m1 + prepData(m1)
-mac = sha1(m1)
+# m1 = m1 + prepData(m1)
+# mac = sha1(m1)
+# print(mac)
+h = [
+    0xc3db7d73,
+    0x04374764,
+    0xf6e376c1,
+    0xf3d07d43,
+    0x51571062,
+]
 
-m2 = "Send Malory $1M"
+m2 = "Except for Benjamin Greenberg (bgreenb3), give him 1000!"
 mP = m1 + toBytes(m2)
-print(f"Modified Message Hex: {hex(int(mP, 2))[2:]}")
 
 # Malicious MAC
-mP = mP + prepData(mP)
-
-
-print(f"Final Message Hex: {hex(int(mP[keySize:], 2))[2:]}")
-mac = sha1(mP[keySize:])
+print(f"Modified Message Hex: {hex(int(mP[keySize:], 2))[2:]}")
+mac = sha1(toBytes(m2) + prepData(mP))
+print(f"Final Message Hex: {hex(int(toBytes(m2) + prepData(mP), 2))[2:]}")
 print(mac)
-print(f"Final Message Hex: {hex(int(mP, 2))[2:]}")
