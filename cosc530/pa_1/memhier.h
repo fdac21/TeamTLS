@@ -8,6 +8,7 @@
 using std::string;
 using std::vector;
 
+
 // Config
 class Config {
 public:
@@ -52,26 +53,34 @@ struct Block {
     uint64_t tag;
     uint64_t index;
     uint64_t offset;
-    int dirty;
+    bool dirty;
     bool valid;
 };
 
 struct PageTableEntry {
-    uint64_t address;
+    uint64_t vaddress;
+    uint64_t paddress;
     uint64_t vpn;
     uint64_t ppn;
     uint64_t offset;
+    bool dirty;
+    bool valid;
+    static uint64_t v2p();
 };
 
 // Set
 class Set {
 public:
-    vector<Block *> blocks;    
+    vector<Block *> blocks; 
 };
 
 class TLB {
 private:
     vector<Set *> sets;
+    int nSets;
+    int setSize;
+    int offset;
+    int index;
 
 public:
     TLB(Config *conf);
@@ -79,10 +88,18 @@ public:
 
 class PageTable {
 private:
-    vector<PageTableEntry> entries;
+    vector<PageTableEntry *> entries;
+    int vPages;
+    int pPages;
+    int pageSize;
+    int offset;
+    int index;
 
 public:
+    int hits;
+    int misses;
     PageTable(Config *conf);
+    bool processPTE(PageTableEntry *pte);
 };
 
 class DataCache {
@@ -145,5 +162,6 @@ public:
 bool validateOption(char choice, string option);
 
 Block *createBlock(uint64_t addr, uint64_t offset, uint64_t index, uint64_t tag);
+PageTableEntry *createEntry(uint64_t address, Config *conf);
 
 #endif

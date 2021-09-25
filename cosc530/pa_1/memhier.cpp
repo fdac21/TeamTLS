@@ -55,6 +55,7 @@ template <typename T> void move(vector<T>& v, size_t oldIndex, size_t newIndex)
 
 /* End Helper Functions */
 
+/* Config Functions */
 Config::Config(string filename) {
     ifstream f;
     string line;
@@ -241,6 +242,9 @@ void Config::printConfig() {
     printf("\n");
 }
 
+/* End Config Functions */
+
+/* DataCache Functions */
 DataCache::DataCache(Config *conf) {
     this->nSets = conf->dcSets;
     this->setSize = conf->dcSetSize;
@@ -325,6 +329,9 @@ bool DataCache::processBlock(Block *blk, char action) {
     this->misses++;
     return false;
 }
+/* End DataCache Functions */
+
+/* L2Cache Functions */
 
 L2Cache::L2Cache(Config *conf) {
     this->nSets = conf->L2Sets;
@@ -414,40 +421,103 @@ bool L2Cache::processBlock(Block *blk, char action) {
     return false;
 }
 
+/* End L2Cache Functions */
+
+/* PageTable Functions */
+PageTable::PageTable(Config *conf) {
+    this->pPages = conf->ptPPages;
+    this->vPages = conf->ptVPages;
+    this->pageSize = conf->ptPageSize;
+    this->offset = conf->ptOffset;
+    this->index = conf->ptOffset + conf->ptIndex;
+    entries.reserve(this->pPages);
+}
+
+bool PageTable::processPTE(PageTableEntry *pte) {
+    PageTableEntry *resident;
+    uint64_t i = 0;
+
+    // If there's a free PTE, insert the PTE
+    if (this->entries.size() < this->pPages) {
+        for (; i < this->entries.size(); i++) {
+            resident = this->entries.at(i);
+
+            // Move the PTE to the front of the entries vector on a hit
+            if (resident->vpn == pte->vpn) {
+                this->hits++;
+                move(this->entries, i, 0);
+                pte->ppn = resident->ppn;
+                return true;
+            } 
+        }
+        pte->ppn = i;
+        this->entries.insert(this->entries.begin(), pte);
+    } else {
+        for (i = 0; i < this->entries.size(); i++) {
+            resident = this->entries.at(i);
+            // TODO Find value for matching (Probably vpn)
+            // Move the PTE to the front of the set on a read hit
+            if (resident->vpn == pte->vpn) {
+                this->hits++;
+                move(this->entries, i, 0);
+                pte->ppn = resident->ppn;
+                return true;
+            } 
+        } 
+        // If there's not a matching PTE then it's a miss 
+        pte->ppn = resident->ppn;
+        this->entries.pop_back();
+        this->entries.insert(this->entries.begin(), pte);
+    }
+    this->misses++;
+    return false;
+}
+
+/* End Page Table Functions */
+
 Memory::Memory(string configFile) {
     this->conf = new Config(configFile);
     this->dc = new DataCache(conf);
     this->L2 = new L2Cache(conf);
-    // this->pt = new PageTable(conf);
+    this->pt = new PageTable(conf);
 }
 
 void Memory::processData(string source) {
     string line;
     char action;
-    uint64_t addr;
-    uint64_t offset;
-    uint64_t pageNumber;
-    uint64_t index;
-    uint64_t tag;
-    bool dcHit;
+    uint64_t addr, offset, pageNumber, index, tag;
+    bool dcHit, ptHit;
     Block *blk;
-    PageTableEntry *entry;
+    PageTableEntry *pte;
 
     while(cin >> line) {
         blk = NULL;
 
         sscanf(line.c_str(), " %c:%x", &action, &addr);
         offset = getPortion(addr, 0, this->conf->ptOffset);
-        pageNumber = getPortion(addr, this->conf->ptOffset, this->conf->ptIndex + this->conf->ptOffset);
+        index = getPortion(addr, this->dc->offset, this->dc->index);
+        tag = getPortion(addr, this->dc->index, 64);
+
+
+        pte = createEntry(addr, this->conf);
+        ptHit = this->pt->processPTE(pte);
+        pte->paddress = pte->offset | (pte->ppn << this->conf->ptOffset);
+
+        if (ptHit) {
+            printf("%08x | %x | %2x | %x | hit  |", pte->vaddress, pte->vpn, pte->offset, pte->ppn);
+        } else {
+            printf("%08x | %x | %2x | %x | miss |", pte->vaddress, pte->vpn, pte->offset, pte->ppn);
+        }
+        addr = pte->paddress;
         index = getPortion(addr, this->dc->offset, this->dc->index);
         tag = getPortion(addr, this->dc->index, 64);
 
         blk = createBlock(addr, offset, index, tag);
 
         if ((dcHit = this->dc->processBlock(blk, action))) {
-            printf("%08x  | %-11x | %-11x | %-6x | %x | hit  ", blk->address, blk->offset, pageNumber, blk->tag, blk->index);
+            printf(" %x | %x | hit  ", blk->tag, blk->index);
         } else {
-            printf("%08x  | %-11x | %-11x | %-6x | %x | miss ", blk->address, blk->offset, pageNumber, blk->tag, blk->index);
+            printf(" %x | %x | miss ",  blk->tag, blk->index);
         }
 
 
@@ -489,6 +559,9 @@ void Memory::processData(string source) {
     cout << "L2 Hits: " << this->L2->hits << endl;
     cout << "L2 Misses: " << this->L2->misses << endl;
     printf("L2 Hit Ratio: %.6f\n", (float) this->L2->hits / (float) (this->L2->hits + this->L2->misses));
+    cout << "PT Hits: " << this->pt->hits << endl;
+    cout << "PT Misses: " << this->pt->misses << endl;
+    printf("PT Hit Ratio: %.6f\n", (float) this->pt->hits / (float) (this->pt->hits + this->pt->misses));
 }
 
 Block *createBlock(uint64_t addr, uint64_t offset, uint64_t index, uint64_t tag) {
@@ -502,9 +575,13 @@ Block *createBlock(uint64_t addr, uint64_t offset, uint64_t index, uint64_t tag)
 
 PageTableEntry *createEntry(uint64_t address, Config *conf) {
     PageTableEntry *entry = new PageTableEntry();
-    entry->address = address;
+    entry->vaddress = address;
+    entry->paddress = 0;
     entry->offset = getPortion(address, 0, conf->ptOffset);
-    entry->vpn = getPortion(address, conf->ptOffset, log2(conf->ptVPages));
-    entry->ppn = getPortion(address, conf->ptOffset, log2(conf->ptPPages));
+    entry->vpn = getPortion(address, conf->ptOffset, log2(conf->ptVPages) + conf->ptOffset);
+    entry->used = false;
+    entry->resident = false;
+    entry->dirty = false;
+
     return entry;
 }
