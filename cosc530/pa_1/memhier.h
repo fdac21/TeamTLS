@@ -79,11 +79,16 @@ private:
     vector<Set *> sets;
     int nSets;
     int setSize;
-    int offset;
-    int index;
 
 public:
+    int offset;
+    int index;
+    int hits;
+    int misses;
+    bool active;
     TLB(Config *conf);
+    bool processData(Block *blk);
+    void replaceBlock(Set *s, int i, Block *blk, Block *resident);
 };
 
 class PageTable {
@@ -100,6 +105,7 @@ public:
     int misses;
     PageTable(Config *conf);
     bool processPTE(PageTableEntry *pte);
+    void virt2phys(PageTableEntry *pte);
 };
 
 class DataCache {

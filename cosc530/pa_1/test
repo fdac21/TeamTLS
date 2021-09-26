@@ -1,0 +1,35 @@
+Virtual  Virt.  Page TLB    TLB TLB  PT   Phys        DC  DC          L2  L2
+Address  Page # Off  Tag    Ind Res. Res. Pg # DC Tag Ind Res. L2 Tag Ind Res.
+-------- ------ ---- ------ --- ---- ---- ---- ------ --- ---- ------ --- ----
+00000c84      c   84miss    0      2   0 miss      0   8  miss 
+0000081c      8   1cmiss    1      4   1 miss      1   1  miss 
+0000014c      1   4cmiss    2      9   0 miss      2   4  miss 
+00000c84      c   84hit     0      0   0 miss      0   0  miss 
+00000400      4    0miss    3      c   0 miss      3   0  miss 
+00000148      1   48hit     2      0   0 miss      0   0  hit  
+00000144      1   44hit     2      0   0 hit                
+00000c80      c   80hit     0      0   0 hit                
+00000008      0    8miss    1      4   0 miss      1   0  miss 
+
+Simulation Statistics
+
+dtlb hits        : 0
+dtlb misses      : 0
+dtlb hit ratio   :  N/A
+
+pt hits          : 4
+pt misses        : 5
+pt hit ratio     : 0.444444
+
+dc hits          : 2
+dc misses        : 7
+dc hit ratio     : 0.222222
+
+L2 hits          : 1
+L2 misses        : 6
+L2 hit ratio     : 0.142857
+
+Total reads      : 9
+Total writes     : 0
+Ratio of reads   : 1.000000
+

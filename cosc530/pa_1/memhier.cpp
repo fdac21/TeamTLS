@@ -15,11 +15,10 @@ int main(int argc, char const *argv[])
 
     Memory* mem = new Memory("old2.config");
     // mem->printConfig();
-    // printf("Virtual  Virt.  Page TLB    TLB TLB  PT   Phys        DC  DC          L2  L2\n");
-    // printf("Address  Page # Off  Tag    Ind Res. Res. Pg # DC Tag Ind Res. L2 Tag Ind Res.\n");
-    // printf("-------- ------ ---- ------ --- ---- ---- ---- ------ --- ---- ------ --- ----\n");
-    // printf("%08x %6x %4x %6x %3x %4s %4s %4x %6x %3x %4s %6x %3x %4s");
-    printf("Phys Addr | Page Offset | Page Number | DC Tag | DC Index\n");
+    printf("Virtual  Virt.  Page TLB    TLB TLB  PT   Phys        DC  DC          L2  L2\n");
+    printf("Address  Page # Off  Tag    Ind Res. Res. Pg # DC Tag Ind Res. L2 Tag Ind Res.\n");
+    printf("-------- ------ ---- ------ --- ---- ---- ---- ------ --- ---- ------ --- ----\n");
+    // printf("%4s %4s  %4s %4s");
     mem->processData("trace.dat");
 
     delete mem;
@@ -30,7 +29,7 @@ int main(int argc, char const *argv[])
 /* Helper Functions */
 
 bool validateOption(char choice, string option) {
-    if (choice != 'n' && choice != 'y') fprintf(stderr, "Choice for %s must be 'y' or 'n'\n", option);
+    if (choice != 'n' && choice != 'y') fprintf(stderr, "Choice for %s must be 'y' or 'n'\n", option.c_str());
     return (choice == 'y') ? true : false;
 }
 
@@ -71,7 +70,7 @@ Config::Config(string filename) {
 
     // Get number of TLB sets
     getline(f, line);
-    sscanf(line.c_str(), "Number of sets: %d", &this->tlbSets);
+    sscanf(line.c_str(), "Number of sets: %ld", &this->tlbSets);
 
     if (this->tlbSets < 0 || this->tlbSets >  256) {
         perror("Set count can only be between 0 and 256\n");
@@ -86,7 +85,7 @@ Config::Config(string filename) {
 
     // Get tlb set size
     getline(f, line);
-    sscanf(line.c_str(), "Set size: %d", &this->tlbSetSize);
+    sscanf(line.c_str(), "Set size: %ld", &this->tlbSetSize);
 
     //  Skip line
     getline(f, line);
@@ -94,7 +93,7 @@ Config::Config(string filename) {
 
     // Get # of virtual pages
     getline(f, line);
-    sscanf(line.c_str(), "Number of virtual pages: %d", &this->ptVPages);
+    sscanf(line.c_str(), "Number of virtual pages: %ld", &this->ptVPages);
     if (this->ptVPages < 0 || this->ptVPages > 8192) {
         perror("Number of virtual pages can only be between 0 and 8192");
         exit(-1);
@@ -106,7 +105,7 @@ Config::Config(string filename) {
 
     // Get # of phyrical pages
     getline(f, line);
-    sscanf(line.c_str(), "Number of physical pages: %d", &this->ptPPages);
+    sscanf(line.c_str(), "Number of physical pages: %ld", &this->ptPPages);
     if (this->ptPPages < 0 || this->ptPPages > 1024) {
         perror("Number of physical pages can only be between 0 and 1024");
         exit(-1);
@@ -118,14 +117,14 @@ Config::Config(string filename) {
 
 
     getline(f, line);
-    sscanf(line.c_str(), "Page size: %d", &this->ptPageSize);
+    sscanf(line.c_str(), "Page size: %ld", &this->ptPageSize);
 
     getline(f, line);
     getline(f, line);
 
     // Get # of data cache sets
     getline(f, line);
-    sscanf(line.c_str(), "Number of sets: %d", &this->dcSets);
+    sscanf(line.c_str(), "Number of sets: %ld", &this->dcSets);
    
     if (this->dcSets < 0 || this->dcSets >  256) {
         perror("Set count can only be between 0 and 256\n");
@@ -139,11 +138,11 @@ Config::Config(string filename) {
 
     // Get data cache set size
     getline(f, line);
-    sscanf(line.c_str(), "Set size: %d", &this->dcSetSize);
+    sscanf(line.c_str(), "Set size: %ld", &this->dcSetSize);
 
     // Get data cache line size
     getline(f, line);
-    sscanf(line.c_str(), "Line size: %d", &this->dcLineSize);
+    sscanf(line.c_str(), "Line size: %ld", &this->dcLineSize);
     if (this->dcLineSize < 8) {
         perror("Data line size for DC must be greater than 8.\n");
         exit(-1);
@@ -159,15 +158,15 @@ Config::Config(string filename) {
 
     // Get # of L2 cache sets
     getline(f, line);
-    sscanf(line.c_str(), "Number of sets: %d", &this->L2Sets);
+    sscanf(line.c_str(), "Number of sets: %ld", &this->L2Sets);
 
     // Get L2 cache set size
     getline(f, line);
-    sscanf(line.c_str(), "Set size: %d", &this->L2SetSize);
+    sscanf(line.c_str(), "Set size: %ld", &this->L2SetSize);
 
     // Get L2 cache line size
     getline(f, line);
-    sscanf(line.c_str(), "Line size: %d", &this->L2LineSize);
+    sscanf(line.c_str(), "Line size: %ld", &this->L2LineSize);
 
     // Get L2 cache write through option
     getline(f, line);
@@ -208,30 +207,30 @@ Config::Config(string filename) {
 
 void Config::printConfig() {
 
-    printf("Data TLB contains %d sets.\n", this->tlbSets);
-    printf("Each set contains %d entries.\n", this->tlbSetSize);
-    printf("Number of bits used for the index is %d.\n\n", this->tlbSetSize);
+    printf("Data TLB contains %ld sets.\n", this->tlbSets);
+    printf("Each set contains %ld entries.\n", this->tlbSetSize);
+    printf("Number of bits used for the index is %ld.\n\n", this->tlbSetSize);
 
-    printf("Number of virtual pages is %d.\n", this->ptVPages);
-    printf("Number of physical pages is %d.\n", this->ptPPages);
-    printf("Each page contains %d bytes.\n", this->ptPageSize);
-    printf("Number of bits used for the page table index is %d.\n", this->ptIndex);
-    printf("Number of bits used for the page offset is %d.\n\n", this->ptOffset);
+    printf("Number of virtual pages is %ld.\n", this->ptVPages);
+    printf("Number of physical pages is %ld.\n", this->ptPPages);
+    printf("Each page contains %ld bytes.\n", this->ptPageSize);
+    printf("Number of bits used for the page table index is %ld.\n", this->ptIndex);
+    printf("Number of bits used for the page offset is %ld.\n\n", this->ptOffset);
 
-    printf("D-cache contains %d sets.\n", this->dcSets);
-    printf("Each set contains %d entries.\n", this->dcSetSize);
-    printf("Each line is %d bytes.\n", this->dcLineSize);
+    printf("D-cache contains %ld sets.\n", this->dcSets);
+    printf("Each set contains %ld entries.\n", this->dcSetSize);
+    printf("Each line is %ld bytes.\n", this->dcLineSize);
     if (this->dcWriteThrough  == 'n')  printf("The cache uses a write-allocate and write-back policy.\n");
     // TODO Figure out size sources
-    printf("Number of bits used for the index is %d.\n", this->dcIndex);
-    printf("Number of bits used for the offset is %d.\n\n", this->dcOffset);
+    printf("Number of bits used for the index is %ld.\n", this->dcIndex);
+    printf("Number of bits used for the offset is %ld.\n\n", this->dcOffset);
 
-    printf("L2-cache contains %d sets.\n", this->L2Sets);
-    printf("Each set contains %d entries.\n", this->L2SetSize);
-    printf("Each line is %d bytes.\n", this->L2LineSize);
+    printf("L2-cache contains %ld sets.\n", this->L2Sets);
+    printf("Each set contains %ld entries.\n", this->L2SetSize);
+    printf("Each line is %ld bytes.\n", this->L2LineSize);
     if (this->L2WriteThrough  == 'n')  printf("The cache uses a write-allocate and write-back policy.\n");
-    printf("Number of bits used for the index is %d.\n", this->L2Index);
-    printf("Number of bits used for the offset is %d.\n\n", this->L2Offset);
+    printf("Number of bits used for the index is %ld.\n", this->L2Index);
+    printf("Number of bits used for the offset is %ld.\n\n", this->L2Offset);
 
     if (this->vAddr == 'y') printf("The addresses read in are virtual addresses.\n");
     else printf("The addresses read in are physical addresses.\n");
@@ -470,44 +469,145 @@ bool PageTable::processPTE(PageTableEntry *pte) {
         this->entries.insert(this->entries.begin(), pte);
     }
     this->misses++;
+    pte->paddress = pte->offset | (pte->ppn << this->offset);
     return false;
 }
 
 /* End Page Table Functions */
+
+/* Translation Lookaside Buffer Functions */
+
+TLB::TLB(Config *conf) {
+    this->nSets = conf->tlbSets;
+    this->setSize = conf->tlbSetSize;
+    this->active = conf->tlb;
+    this->offset = conf->ptOffset;
+    this->index = log2(this->nSets) + conf->ptOffset;
+    this->hits = 0;
+    this->misses = 0;
+
+    if (this->active) {
+        this->sets.resize(this->nSets);
+
+        for (int i = 0; i < this->nSets; i++) {
+            this->sets.at(i) = new Set();
+            this->sets.at(i)->blocks.reserve(this->setSize);
+        }
+    }
+}
+
+bool TLB::processData(Block *blk) {
+    Set *s = NULL;
+    Block  *resident = NULL;
+    // cout << hex << blk->index << endl;
+
+    s = this->sets.at(blk->index % this->nSets);
+
+    // If there's a free block, insert the block
+    if (s->blocks.size() < this->setSize) {
+        for (int i = 0; i < s->blocks.size(); i++) {
+            resident = s->blocks.at(i);
+
+            if (resident->tag == blk->tag) {
+                this->hits++;
+                move(s->blocks, i, 0);
+                return true;
+            } 
+        }
+        s->blocks.insert(s->blocks.begin(), blk);
+    } else {
+
+        for (int i = 0; i < s->blocks.size(); i++) {
+            resident = s->blocks.at(i);
+            // If there's a block with matching index and tag
+            if (resident->tag == blk->tag) {
+                this->hits++;
+                move(s->blocks, i, 0);
+                return true;
+            } 
+            // If there's not a matching block then it's a miss 
+            else {
+                this->replaceBlock(s, i, blk, resident);
+            }
+
+        }
+
+    }
+    this->misses++;
+    return false;
+}
+
+void TLB::replaceBlock(Set *s, int i, Block *blk, Block *resident) {
+     // If the cache is direct mapped
+    if (this->setSize == 1) {
+        s->blocks.at(i) = blk;
+        
+        delete resident;
+    } 
+    // Otherwise LRU 
+    else {
+        s->blocks.pop_back();
+        s->blocks.insert(s->blocks.begin(), blk);
+    }
+}
+/* End Translation Lookaside Buffer Functions */
 
 Memory::Memory(string configFile) {
     this->conf = new Config(configFile);
     this->dc = new DataCache(conf);
     this->L2 = new L2Cache(conf);
     this->pt = new PageTable(conf);
+    this->tlb = new TLB(conf);
 }
 
 void Memory::processData(string source) {
     string line;
     char action;
     uint64_t addr, offset, pageNumber, index, tag;
-    bool dcHit, ptHit;
+    bool dcHit, ptHit, tlbHit;
     Block *blk;
     PageTableEntry *pte;
 
     while(cin >> line) {
         blk = NULL;
 
-        sscanf(line.c_str(), " %c:%x", &action, &addr);
+        sscanf(line.c_str(), " %c:%lx", &action, &addr);
+
+        if (action == 'R') this->reads++;
+        else this->writes++;
+
         offset = getPortion(addr, 0, this->conf->ptOffset);
-        index = getPortion(addr, this->dc->offset, this->dc->index);
-        tag = getPortion(addr, this->dc->index, 64);
+        index = getPortion(addr, this->tlb->offset, this->tlb->index);
+        tag = getPortion(addr, this->tlb->index, 64);
 
 
         pte = createEntry(addr, this->conf);
+        
+        // this->pt->virt2phys(pte);
         ptHit = this->pt->processPTE(pte);
-        pte->paddress = pte->offset | (pte->ppn << this->conf->ptOffset);
 
-        if (ptHit) {
-            printf("%08x | %x | %2x | %x | hit  |", pte->vaddress, pte->vpn, pte->offset, pte->ppn);
-        } else {
-            printf("%08x | %x | %2x | %x | miss |", pte->vaddress, pte->vpn, pte->offset, pte->ppn);
+        blk = createBlock(pte->paddress, offset, index, tag);
+        printf("%08lx %6lx %4lx", pte->vaddress, pte->vpn, pte->offset);
+
+        if (this->tlb->active) {
+            if (tlbHit = this->tlb->processData(blk)) {
+                printf(" %6lx %3lx hit  ", blk->tag, blk->index);
+                this->pt->hits--;
+            } else {
+                printf(" %6lx %3lx miss ",  blk->tag, blk->index);
+            }
         }
+
+        if (!tlbHit || !this->tlb->active) {
+            if (ptHit) {
+                printf("hit  %4lx ", pte->ppn);
+            } else {
+                printf("miss %4lx ", pte->ppn);
+            }
+        } else {
+            printf("     %4lx ", pte->ppn);
+        }
+        
         addr = pte->paddress;
         index = getPortion(addr, this->dc->offset, this->dc->index);
         tag = getPortion(addr, this->dc->index, 64);
@@ -515,9 +615,9 @@ void Memory::processData(string source) {
         blk = createBlock(addr, offset, index, tag);
 
         if ((dcHit = this->dc->processBlock(blk, action))) {
-            printf(" %x | %x | hit  ", blk->tag, blk->index);
+            printf("%6lx %3lx hit  ", blk->tag, blk->index);
         } else {
-            printf(" %x | %x | miss ",  blk->tag, blk->index);
+            printf("%6lx %3lx miss ",  blk->tag, blk->index);
         }
 
 
@@ -527,12 +627,12 @@ void Memory::processData(string source) {
             blk = createBlock(addr, offset, index, tag);
 
             if (this->L2->processBlock(blk, action)) {
-                printf("| %-6x | %x | hit  \n", blk->tag, blk->index);
+                printf("%6lx %3lx  hit  \n", blk->tag, blk->index);
             } else {
-                printf("| %-6x | %x | miss \n", blk->tag, blk->index);
+                printf("%6lx %3lx  miss \n", blk->tag, blk->index);
             }
         } else {
-            printf("| %-6s | %s |     \n", " ", " ");
+            printf("%6s %s      \n", " ", " ");
         }
 
         // delete blk;
@@ -552,16 +652,38 @@ void Memory::processData(string source) {
     //         blk = NULL;
     //     }
     // }
+    cout << endl << "Simulation Statistics" << endl << endl;
+    cout << "dtlb hits        : " << this->tlb->hits << endl;
+    cout << "dtlb misses      : " << this->tlb->misses << endl;
+    if (this->tlb->active) {
+        printf("dtlb hit ratio   : %.6f\n\n", (float) this->tlb->hits / (float) (this->tlb->hits + this->tlb->misses));
+    } else {
+        cout << "dtlb hit ratio   :  N/A" << endl << endl;
+    }
 
-    cout << "DC Hits: " << this->dc->hits << endl;
-    cout << "DC Misses: " << this->dc->misses << endl;
-    printf("DC Hit Ratio: %.6f\n", (float) this->dc->hits / (float) (this->dc->hits + this->dc->misses));
-    cout << "L2 Hits: " << this->L2->hits << endl;
-    cout << "L2 Misses: " << this->L2->misses << endl;
-    printf("L2 Hit Ratio: %.6f\n", (float) this->L2->hits / (float) (this->L2->hits + this->L2->misses));
-    cout << "PT Hits: " << this->pt->hits << endl;
-    cout << "PT Misses: " << this->pt->misses << endl;
-    printf("PT Hit Ratio: %.6f\n", (float) this->pt->hits / (float) (this->pt->hits + this->pt->misses));
+    cout << "pt hits          : " << this->pt->hits << endl;
+    cout << "pt misses        : " << this->pt->misses << endl;
+    if (this->conf->vAddr) {
+        printf("pt hit ratio     : %.6f\n\n", (float) this->pt->hits / (float) (this->pt->hits + this->pt->misses));
+    } else {
+        cout << "pt hit ratio     :  N/A" << endl << endl;
+    }
+    
+    cout << "dc hits          : " << this->dc->hits << endl;
+    cout << "dc misses        : " << this->dc->misses << endl;
+    printf("dc hit ratio     : %.6f\n\n", (float) this->dc->hits / (float) (this->dc->hits + this->dc->misses));
+    
+    cout << "L2 hits          : " << this->L2->hits << endl;
+    cout << "L2 misses        : " << this->L2->misses << endl;
+    if (this->L2->active) {
+        printf("L2 hit ratio     : %.6f\n\n", (float) this->L2->hits / (float) (this->L2->hits + this->L2->misses));
+    } else {
+        cout << "L2 hit ratio     :  N/A" << endl << endl;
+    }
+
+    cout << "Total reads      : " << this->reads << endl;
+    cout << "Total writes     : " << this->writes << endl;
+    printf("Ratio of reads   : %.6f\n\n", (float) this->reads / (float) (this->reads + this->writes));
 }
 
 Block *createBlock(uint64_t addr, uint64_t offset, uint64_t index, uint64_t tag) {
@@ -579,8 +701,8 @@ PageTableEntry *createEntry(uint64_t address, Config *conf) {
     entry->paddress = 0;
     entry->offset = getPortion(address, 0, conf->ptOffset);
     entry->vpn = getPortion(address, conf->ptOffset, log2(conf->ptVPages) + conf->ptOffset);
-    entry->used = false;
-    entry->resident = false;
+    // entry->used = false;
+    // entry->resident = false;
     entry->dirty = false;
 
     return entry;
