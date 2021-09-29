@@ -436,8 +436,9 @@ PageTable::PageTable(Config *conf) {
     this->pPageEntries.resize(vPages);
     entries.reserve(this->pPages);
 
+
     for (int i = 0; i < this->pPages; i++) pPageEntries.at(i) = this->pPages - (i + 1);
-    
+    for (int i = 0; i < this->pPages; i++) cout << pPageEntries.at(i) << endl;
 }
 
 bool PageTable::processPTE(PageTableEntry *pte) {
@@ -453,6 +454,7 @@ bool PageTable::processPTE(PageTableEntry *pte) {
             if (resident->vpn == pte->vpn) {
                 this->hits++;
                 move(this->entries, i, 0);
+                move(this->pPageEntries, i, 0);
                 pte->ppn = resident->ppn;
                 return true;
             } 
@@ -467,6 +469,7 @@ bool PageTable::processPTE(PageTableEntry *pte) {
             if (resident->vpn == pte->vpn) {
                 this->hits++;
                 move(this->entries, i, 0);
+                move(this->pPageEntries, i, 0);
                 pte->ppn = resident->ppn;
                 return true;
             } 
