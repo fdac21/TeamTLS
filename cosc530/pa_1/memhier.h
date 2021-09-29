@@ -94,6 +94,7 @@ public:
 class PageTable {
 private:
     vector<PageTableEntry *> entries;
+    vector<int> pPageEntries;
     int vPages;
     int pPages;
     int pageSize;
@@ -113,14 +114,15 @@ protected:
     int nSets;
     int setSize;
     int lineSize;
-    bool writeThrough;
 
 
 public:
+    bool writeThrough;
     int offset;
     int index;
     int hits;
     int misses;
+    Block *writeBack;
     vector<Set *> sets;
 
     DataCache(Config *conf);
@@ -134,9 +136,9 @@ class L2Cache {
     int nSets;
     int setSize;
     int lineSize;
-    bool writeThrough;
 
 public:
+    bool writeThrough;
     bool active;
     int hits;
     int misses;
@@ -151,13 +153,13 @@ public:
 // Cache 
 class Memory {
 private:
-    Config *conf;
     DataCache *dc;
     PageTable *pt;
     TLB *tlb;
     L2Cache *L2;
 
 public:
+    Config *conf;
     int reads;
     int writes;
     Memory(string configFile);
