@@ -304,7 +304,7 @@ bool DataCache::processBlock(Block *blk, char action) {
                 return true;
             } 
         }
-        s->blocks.insert(s->blocks.begin(), blk);
+        if (!this->writeThrough) s->blocks.insert(s->blocks.begin(), blk);
     } else {
         for (int i = 0; i < s->blocks.size(); i++) {
             resident = s->blocks.at(i);
@@ -394,7 +394,7 @@ bool L2Cache::processBlock(Block *blk, char action) {
                 return true;
             } 
         }
-        s->blocks.insert(s->blocks.begin(), blk);
+        if(!this->writeThrough) s->blocks.insert(s->blocks.begin(), blk);
     } else {
 
         for (int i = 0; i < s->blocks.size(); i++) {
@@ -586,7 +586,8 @@ void Memory::processData(string source) {
         if (this->conf->vAddr) {
             offset = getPortion(addr, 0, this->conf->ptOffset);
             index = getPortion(addr, this->tlb->offset, this->tlb->index);
-            tag = getPortion(addr, this->tlb->index, 64);   pte = createEntry(addr, this->conf);
+            tag = getPortion(addr, this->tlb->index, 64);   
+            pte = createEntry(addr, this->conf);
             printf("%08lx %6lx %4lx", pte->vaddress, pte->vpn, pte->offset);
 
             ptHit = this->pt->processPTE(pte);
