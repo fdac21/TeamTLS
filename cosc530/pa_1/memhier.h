@@ -53,6 +53,7 @@ struct Block {
     uint64_t tag;
     uint64_t index;
     uint64_t offset;
+    uint64_t ppn;
     bool dirty;
     bool valid;
 };
@@ -65,7 +66,6 @@ struct PageTableEntry {
     uint64_t offset;
     bool dirty;
     bool valid;
-    static uint64_t v2p();
 };
 
 // Set
@@ -88,6 +88,7 @@ public:
     bool active;
     TLB(Config *conf);
     bool processData(Block *blk);
+    void invalidateBlock(uint64_t ppn);
     void replaceBlock(Set *s, int i, Block *blk, Block *resident);
 };
 
@@ -102,6 +103,7 @@ private:
     int index;
 
 public:
+    int diskRefs;
     int hits;
     int misses;
     PageTable(Config *conf);
@@ -122,17 +124,17 @@ public:
     int index;
     int hits;
     int misses;
-    Block *writeBack;
+    Block *write;
     vector<Set *> sets;
 
     DataCache(Config *conf);
     void initFrame();
     void replaceBlock(Set *s, int i, Block *blk, Block *resident);
+    void invalidateBlock(uint64_t ppn);
     bool processBlock(Block *blk, char action);
 };
 
 class L2Cache {
-    vector<Set *> sets;
     int nSets;
     int setSize;
     int lineSize;
@@ -140,13 +142,16 @@ class L2Cache {
 public:
     bool writeThrough;
     bool active;
+    int memrefs;
     int hits;
     int misses;
     int offset;
     int index;
+    vector<Set *> sets;
     L2Cache(Config *conf);
     void initFrame();
     void replaceBlock(Set *s, int i, Block *blk, Block *resident);
+    void invalidateBlock(uint64_t ppn);
     bool processBlock(Block *blk, char action);
 };
 
@@ -169,7 +174,8 @@ public:
 
 bool validateOption(char choice, string option);
 
-Block *createBlock(uint64_t addr, uint64_t offset, uint64_t index, uint64_t tag);
+Block *createBlock(uint64_t addr, uint64_t offset, uint64_t index, uint64_t tag, uint64_t ppn);
+Block *createBlock(uint64_t addr, uint64_t offset, uint64_t index, uint64_t tag, uint64_t ppn, bool valid);
 PageTableEntry *createEntry(uint64_t address, Config *conf);
 
 #endif
