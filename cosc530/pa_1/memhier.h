@@ -76,7 +76,6 @@ public:
 
 class TLB {
 private:
-    vector<Set *> sets;
     int nSets;
     int setSize;
 
@@ -86,6 +85,8 @@ public:
     int hits;
     int misses;
     bool active;
+    Block *invalid;
+    vector<Set *> sets;
     TLB(Config *conf);
     bool processData(Block *blk);
     void invalidateBlock(uint64_t ppn);
@@ -103,7 +104,6 @@ private:
     int index;
 
 public:
-    int diskRefs;
     int hits;
     int misses;
     PageTable(Config *conf);
@@ -141,8 +141,8 @@ class L2Cache {
 
 public:
     bool writeThrough;
+    bool writeBlock;
     bool active;
-    int memrefs;
     int hits;
     int misses;
     int offset;
@@ -165,6 +165,8 @@ private:
 
 public:
     Config *conf;
+    int diskRefs;
+    int memRefs;
     int reads;
     int writes;
     Memory(string configFile);

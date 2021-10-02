@@ -303,6 +303,10 @@ bool DataCache::processBlock(Block *blk, char action) {
             // Write-Back/Write-Allocate
             else if (action == 'W' && !this->writeThrough) {
                 move(s->blocks, i, 0);
+            } 
+            // Write-Through/No Write-Allocate
+            else {
+               move(s->blocks, i, 0);
             }
             return true;
         }
@@ -313,102 +317,31 @@ bool DataCache::processBlock(Block *blk, char action) {
         // Read
         if (action == 'R') {
             s->blocks.insert(s->blocks.begin(), blk);
-        } else if (action == 'W' && !this->writeThrough)  {
+        }
+        // Write-Back/Write-Allocate
+        else if (action == 'W' && !this->writeThrough)  {
             blk->dirty = true;
             // TODO Determine if I need to write out the LRU block if it's not being evicted
             // this->write = createBlock(resident->address, resident->offset, resident->index, resident->tag, resident->ppn, resident->valid);
             // this->write->dirty = resident->dirty;
             s->blocks.insert(s->blocks.begin(), blk);
-        }
+        } 
     } else {
         i--;
         // Cache Miss
         if (action == 'R') {
             this->replaceBlock(s, i, blk, resident);
-        } else if (action == 'W' && !this->writeThrough)  {
+        } 
+        // Write-Back/Write-Allocate
+        else if (action == 'W' && !this->writeThrough)  {
             blk->dirty = true;
             this->write = createBlock(resident->address, resident->offset, resident->index, resident->tag, resident->ppn, resident->valid);
             this->write->dirty = resident->dirty;
             this->replaceBlock(s, i, blk, resident);
-        }
+        } 
+        // Don't update cache on Write-Through/No Write-Allocate
     }
 
-    // If there's a free block, insert the block
-    // if (s->blocks.size() < this->setSize) {
-    //     for (i = 0; i < s->blocks.size(); i++) {
-    //         resident = s->blocks.at(i);
-
-    //         // Cache Hit
-    //         if (resident->tag == blk->tag && resident->valid) {
-    //             this->hits++;
-    //             // Update cache on write if there is a hit
-    //             if (action == 'W') {
-    //                 // Write back
-    //                 if (!this->writeThrough) blk->dirty = true;
-    //                 // Write through
-    //                 if(this->writeThrough) this->write = createBlock(resident->address, resident->offset, resident->index, resident->tag, resident->ppn);
-    //                 this->replaceBlock(s, i, blk, resident);
-    //             }
-    //             // Move the block to the front of the set on a read hit
-    //             else move(s->blocks, i, 0);
-    //             return true;
-    //         } 
-    //     }
-
-    //     // Cache Miss
-    //     // Read miss
-    //     if (action == 'R') {
-    //         s->blocks.insert(s->blocks.begin(), blk);
-    //         this->write = createBlock(resident->address, resident->offset, resident->index, resident->tag, resident->ppn, resident->valid);
-    //     }
-    //     // Write back miss
-    //     else if (action == 'W' || !this->writeThrough) {
-    //         if (resident != NULL) {
-    //             // if (blk->ppn == resident->ppn) this->invalidateBlock(resident->ppn);
-    //             if(resident->dirty) this->write = createBlock(resident->address, resident->offset, resident->index, resident->tag, resident->ppn, resident->valid);
-    //         }
-    //         s->blocks.insert(s->blocks.begin(), blk);
-    //     } 
-    //     // Write-through miss
-    //     else {
-    //         this->write = createBlock(resident->address, resident->offset, resident->index, resident->tag, resident->ppn, resident->valid);
-    //     }
-    // } 
-    
-    // // If the current set/d-map cache is full
-    // else {
-    //     for ( i = 0; i < s->blocks.size(); i++) {
-    //         resident = s->blocks.at(i);
-    //        // Cache Hit
-    //         if (resident->tag == blk->tag && resident->valid) {
-    //             this->hits++;
-    //             // Update cache on write if there is a hit
-    //             if (action == 'W') {
-    //                 // Write back
-    //                 if (!this->writeThrough) blk->dirty = true;
-    //                 // Write through
-    //                 if(this->writeThrough) this->write = createBlock(resident->address, resident->offset, resident->index, resident->tag, resident->ppn);
-    //                 this->replaceBlock(s, i, blk, resident);
-    //             }
-    //             // Move the block to the front of the set on a read hit
-    //             else move(s->blocks, i, 0);
-    //             return true;
-    //         }  
-    //     }
-    //     // Cache Miss
-    //     // Read hit or write back miss
-    //     if (action == 'R' || !this->writeThrough) {
-    //         // if (blk->ppn == resident->ppn) this->invalidateBlock(resident->ppn);
-    //         if(resident->dirty) this->write = createBlock(resident->address, resident->offset, resident->index, resident->tag, resident->ppn, resident->valid);
-    //         this->replaceBlock(s, --i,blk, resident);
-    //     } 
-    //     // Write-through miss
-    //     else {
-    //         this->write = createBlock(resident->address, resident->offset, resident->index, resident->tag, resident->ppn, resident->valid);
-    //     }
-    // }
-    // this->misses++;
-    // return false;
     this->misses++;
     return false;
 }
@@ -437,7 +370,7 @@ L2Cache::L2Cache(Config *conf) {
     this->lineSize = conf->L2LineSize;
     this->offset = conf->L2Offset;
     this->index = conf->L2Index + conf->L2Offset;
-
+    this->writeBlock = false;
     this->writeThrough = conf->L2WriteThrough;
     this->active = conf->L2;
 
@@ -451,7 +384,6 @@ L2Cache::L2Cache(Config *conf) {
 
     this->hits = 0;
     this->misses = 0;
-    this->memrefs = 0;
 }
 
 void L2Cache::replaceBlock(Set *s, int i, Block *blk, Block *resident) {
@@ -473,8 +405,6 @@ bool L2Cache::processBlock(Block *blk, char action) {
     Set *s = NULL;
     Block  *resident = NULL;
     int i;
-    // cout << this->setSize << endl;
-    // cout << hex << blk->index << endl;
 
     s = this->sets.at(blk->index % this->nSets);
 
@@ -491,6 +421,10 @@ bool L2Cache::processBlock(Block *blk, char action) {
             else if (action == 'W' && !this->writeThrough) {
                 blk->dirty = true;
                 move(s->blocks, i, 0);
+            }
+            // Write-Through/No Write-Allocate
+            else {
+               move(s->blocks, i, 0);
             }
             return true;
         }
@@ -512,86 +446,13 @@ bool L2Cache::processBlock(Block *blk, char action) {
             this->replaceBlock(s, i, blk, resident);
         }  else if (action == 'W' && !this->writeThrough)  {
             blk->dirty = true;
+            this->writeBlock = true;
             this->replaceBlock(s, i, blk, resident);
         }
     }
 
 
-    // // If there's a free block, insert the block
-    // if (s->blocks.size() < this->setSize) {
-    //     for (i = 0; i < s->blocks.size(); i++) {
-    //         resident = s->blocks.at(i);
-
-    //         // Cache Hit
-    //         if (resident->tag == blk->tag && resident->valid) {
-    //             this->hits++;
-    //             // Update cache on write if there is a hit
-    //             if (action == 'W') {
-    //                 // Write back
-    //                 if (!this->writeThrough) blk->dirty = true;
-    //                 // Write through
-    //                 if(this->writeThrough) this->memrefs++;
-    //                 this->replaceBlock(s, i, blk, resident);
-    //             }
-    //             // Move the block to the front of the set on a read hit
-    //             else move(s->blocks, i, 0);
-    //             return true;
-    //         } 
-    //     }
-
-    //     // Cache Miss
-    //     // Read miss
-    //     if (action == 'R') {
-    //         s->blocks.insert(s->blocks.begin(), blk);
-    //     }
-    //     // Write back miss
-    //     else if (action == 'W' || !this->writeThrough) {
-    //         if (resident != NULL) {
-    //             // if (blk->ppn == resident->ppn) this->invalidateBlock(resident->ppn);
-    //             if(resident->dirty) this->memrefs++;
-    //         }
-    //         s->blocks.insert(s->blocks.begin(), blk);
-    //     } 
-    //     // Write-through miss
-    //     else {
-    //         this->memrefs++;
-    //     }
-    // } 
-    
-    // // If the current set/d-map cache is full
-    // else {
-    //     for ( i = 0; i < s->blocks.size(); i++) {
-    //         resident = s->blocks.at(i);
-    //        // Cache Hit
-    //         if (resident->tag == blk->tag && resident->valid) {
-    //             this->hits++;
-    //             // Update cache on write if there is a hit
-    //             if (action == 'W') {
-    //                 // Write back
-    //                 if (!this->writeThrough) blk->dirty = true;
-    //                 // Write through
-    //                 if(this->writeThrough) this->memrefs++;
-    //                 this->replaceBlock(s, i, blk, resident);
-    //             }
-    //             // Move the block to the front of the set on a read hit
-    //             else move(s->blocks, i, 0);
-    //             return true;
-    //         }  
-    //     }
-    //     // Cache Miss
-    //     // Read miss or write back miss
-    //     if (action == 'R' || !this->writeThrough) {
-    //         // if (blk->ppn == resident->ppn) this->invalidateBlock(resident->ppn);
-    //         if(resident->dirty) this->memrefs++;
-    //         this->replaceBlock(s, --i,blk, resident);
-    //     } 
-    //     // Write-through miss
-    //     else {
-    //         this->memrefs++;
-    //     }
-    // }
     this->misses++;
-    this->memrefs++;
     return false;
 }
 
@@ -619,12 +480,13 @@ PageTable::PageTable(Config *conf) {
     this->pageSize = conf->ptPageSize;
     this->offset = conf->ptOffset;
     this->index = conf->ptOffset + conf->ptIndex;
+    this->hits = 0;
+    this->misses = 0;
     this->pPageEntries.resize(vPages);
     entries.reserve(this->pPages);
 
-
     for (int i = 0; i < this->pPages; i++) pPageEntries.at(i) = this->pPages - (i + 1);
-    for (int i = 0; i < this->pPages; i++) cout << pPageEntries.at(i) << endl;
+    // for (int i = 0; i < this->pPages; i++) cout << pPageEntries.at(i) << endl;
 }
 
 bool PageTable::processPTE(PageTableEntry *pte) {
@@ -695,43 +557,29 @@ TLB::TLB(Config *conf) {
 bool TLB::processData(Block *blk) {
     Set *s = NULL;
     Block  *resident = NULL;
+    int i;
     // cout << hex << blk->index << endl;
 
     s = this->sets.at(blk->index % this->nSets);
 
     // If there's a free block, insert the block
-    if (s->blocks.size() < this->setSize) {
-        for (int i = 0; i < s->blocks.size(); i++) {
-            resident = s->blocks.at(i);
+    for (i = 0; i < s->blocks.size(); i++) {
+        resident = s->blocks.at(i);
 
-            if (resident->tag == blk->tag && resident->valid) {
-                this->hits++;
-                move(s->blocks, i, 0);
-                return true;
-            } 
-        }
-        if (resident != NULL && blk->ppn == resident->ppn) this->invalidateBlock(resident->ppn);
+        if (resident->tag == blk->tag && resident->valid) {
+            this->hits++;
+            move(s->blocks, i, 0);
+            return true;
+        } 
+    }
+
+    if (s->blocks.size() < this->setSize) {
+        if (resident != NULL && blk->ppn == resident->ppn) this->invalid = createBlock(resident->address, resident->offset, resident->index, resident->tag, resident->ppn, resident->valid);
         s->blocks.insert(s->blocks.begin(), blk);
     } else {
-
-        for (int i = 0; i < s->blocks.size(); i++) {
-            resident = s->blocks.at(i);
-            // If there's a block with matching index and tag
-            if (resident->tag == blk->tag && resident->valid) {
-                this->hits++;
-                move(s->blocks, i, 0);
-                return true;
-            } 
-            // If there's not a matching block then it's a miss 
-            else {
-                if (blk->ppn == resident->ppn) this->invalidateBlock(resident->ppn);
-
-                this->replaceBlock(s, i, blk, resident);
-            }
-
-        }
-
-    }
+        if (blk->ppn == resident->ppn) this->invalid = createBlock(resident->address, resident->offset, resident->index, resident->tag, resident->ppn, resident->valid);
+        this->replaceBlock(s, i - 1, blk, resident);
+    } 
     this->misses++;
     return false;
 }
@@ -753,7 +601,8 @@ void TLB::replaceBlock(Set *s, int i, Block *blk, Block *resident) {
 void TLB::invalidateBlock(uint64_t ppn) {
     Set *s;
     Block *blk;
-    for (int i = 0; i < this->nSets; i++) {
+    int i;
+    for (i = 0; i < this->nSets; i++) {
         s = this->sets.at(i);
 
         for (int j = 0; j < s->blocks.size(); j++) {
@@ -771,6 +620,8 @@ Memory::Memory(string configFile) {
     this->L2 = new L2Cache(conf);
     this->pt = new PageTable(conf);
     this->tlb = new TLB(conf);
+    this->memRefs = 0;
+    this->diskRefs = 0;
 }
 
 void Memory::processData(string source) {
@@ -799,8 +650,7 @@ void Memory::processData(string source) {
             printf("%08lx %6lx %4lx", pte->vaddress, pte->vpn, pte->offset);
 
             if (!(ptHit = this->pt->processPTE(pte))) {
-                    // Invalidate Entries
-                    // if (this->conf->L2) this->L2->invalidateBlock(pte->ppn);
+                this->diskRefs++;
             }
 
 
@@ -813,7 +663,23 @@ void Memory::processData(string source) {
                     printf(" %6lx %3lx hit  ", blk->tag, blk->index);
                     this->pt->hits--;
                 } else {
-                    printf(" %6lx %3lx miss ",  blk->tag, blk->index);                    
+                    printf(" %6lx %3lx miss ",  blk->tag, blk->index);
+                    
+                    if (this->tlb->invalid != NULL) {
+                        for (int i = 0; i < conf->tlbSets; i++) {
+                            s = this->tlb->sets.at(i);
+
+                            for (int j = s->blocks.size() - 1; j >= 0; j--) {
+                                temp = s->blocks.at(j);
+
+                                if (temp->ppn = this->tlb->invalid->ppn) {
+                                    // cout << "writing back DC line with tag " << hex << temp->tag << " and index " << hex << temp->index << " to L2 cache" << endl;
+                                    move(s->blocks, j, s->blocks.size() - 1);
+                                    this->diskRefs++;
+                                }
+                            }
+                        }           
+                    }
                 }
             } else {
                 printf(" %6s %3s      ",  "", "");
@@ -845,30 +711,58 @@ void Memory::processData(string source) {
             printf("%6lx %3lx hit  ", blk->tag, blk->index);
         } else {
             printf("%6lx %3lx miss ",  blk->tag, blk->index);
-
- 
-
             
-            if(this->conf->L2 && action == 'W') {
-                for (int i = 0; i < conf->dcSets; i++) {
-                    s = this->dc->sets.at(i);
+            
+            if(this->conf->L2) {
+                if (!tlbHit && !ptHit) {
+                    // Check for any invalidated blocks and write them to L2 if found
+                    for (int i = 0; i < conf->dcSets; i++) {
+                        s = this->dc->sets.at(i);
 
-                    for (int j = 0; j < s->blocks.size(); j++) {
-                        temp = s->blocks.at(j);
+                        for (int j = s->blocks.size() - 1; j >= 0; j--) {
+                            temp = s->blocks.at(j);
 
-                        if (temp->ppn == blk->ppn && blk != temp && !tlbHit && !ptHit) {
-                            index = getPortion(temp->address, this->L2->offset, this->L2->index);
-                            tag = getPortion(temp->address, this->L2->index, 64);
-                            invalid = createBlock(temp->address, offset, index, tag, temp->ppn, temp->valid);
-                            invalid->dirty = temp->dirty;
-                            // cout << "writing back DC line with tag " << hex << temp->tag << " and index " << hex << temp->index << " to L2 cache" << endl;
+                            if (temp->ppn == blk->ppn && blk != temp) {
+                                index = getPortion(temp->address, this->L2->offset, this->L2->index);
+                                tag = getPortion(temp->address, this->L2->index, 64);
+                                invalid = createBlock(temp->address, offset, index, tag, temp->ppn, temp->valid);
+                                invalid->dirty = temp->dirty;
+                                // cout << "writing back DC line with tag " << hex << temp->tag << " and index " << hex << temp->index << " to L2 cache" << endl;
 
-                            this->L2->processBlock(invalid, action);
-                            invalid->valid = false;
+                                if (!this->L2->processBlock(invalid, action)) {
+                                    this->memRefs++;
+
+                                    if ( !tlbHit && !ptHit) {
+                                        for (int i = 0; i < conf->L2Sets; i++) {
+                                            s = this->L2->sets.at(i);
+
+                                            for (int j = 0; j < s->blocks.size(); j++) {
+                                                temp = s->blocks.at(j);
+                                                if (temp->ppn == blk->ppn && blk != temp) {
+                                                    // cout << "writing back L2 line with tag " << hex << temp->tag << " and index " << hex << temp->index << " to main memory" << endl;
+
+                                                    // If there's an invalid L2 cache that needs to be written down, then it is simply another memory reference
+                                                    this->memRefs++;
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    // If L2 needs to write an evicted block to main memory, increment memRefs and reset 
+                                    if (this->L2->writeBlock) {
+                                        this->memRefs++;
+                                        this->L2->writeBlock = false;
+                                    }
+                                }
+                                invalid->valid = false;
+                                move(s->blocks, j, s->blocks.size() - 1);
+                            }
                         }
                     }
                 }
-                    
+                
+                
+                // If there is a block that needs to be written back from write-back policy, write it to L2 cache
                 if (this->dc->write != NULL) {
                     index = getPortion(this->dc->write->address, this->L2->offset, this->L2->index);
                     tag = getPortion(this->dc->write->address, this->L2->index, 64);
@@ -876,11 +770,58 @@ void Memory::processData(string source) {
                     blk->dirty = this->dc->write->dirty;
                     // cout << "writing back DC line with tag " << hex << this->dc->write->tag << " and index " << hex << this->dc->write->index << " to L2 cache" << endl;
                     
-                    this->L2->processBlock(blk, action);
+                    // Handle cases where write back causes miss
+                    if(!this->L2->processBlock(blk, action)) {
+                        this->memRefs++;
+
+                        if ( !tlbHit && !ptHit) {
+                            for (int i = 0; i < conf->L2Sets; i++) {
+                                s = this->L2->sets.at(i);
+
+                                for (int j = s->blocks.size() - 1; j >= 0; j--) {
+                                    temp = s->blocks.at(j);
+                                    if (temp->ppn == blk->ppn && blk != temp) {
+                                        // cout << "writing back L2 line with tag " << hex << temp->tag << " and index " << hex << temp->index << " to main memory" << endl;
+
+                                        // If there's an invalid L2 cache that needs to be written down, then it is simply another memory reference
+                                        this->memRefs++;
+                                        move(s->blocks, j, s->blocks.size() - 1);
+                                    }
+                                }
+                            }
+                        }
+
+                        // If L2 needs to write an evicted block to main memory, increment memRefs and reset 
+                        if (this->L2->writeBlock) {
+                            this->memRefs++;
+                            this->L2->writeBlock = false;
+                        }
+                    }
                     this->dc->write = NULL;
+                }
+            } else {
+                this->memRefs++;
+                //  If L2 is inavtive, check for any invalidated blocks and write to main memory instead
+                if (!tlbHit && !ptHit) {
+                    for (int i = 0; i < conf->dcSets; i++) {
+                        s = this->dc->sets.at(i);
+
+                        for (int j = 0; j < s->blocks.size(); j++) {
+                            temp = s->blocks.at(j);
+
+                            if (temp->ppn == blk->ppn && blk != temp) {
+                                this->memRefs++;
+                            }
+                        }
+                    }
+                }
+                // If L2 is inactive and there is a block that needs to be written back, write to main memory instead
+                if (this->dc->write != NULL) {
+                    this->memRefs++;
                 }
             }
         }
+        
 
 
         if (this->conf->L2 && (!dcHit || this->dc->writeThrough)) {
@@ -893,27 +834,34 @@ void Memory::processData(string source) {
                 printf("%6lx %3lx hit \n", blk->tag, blk->index);
             } else {
                 printf("%6lx %3lx miss\n", blk->tag, blk->index);
+                // This is the lowest cache so the next access would be to memory
+                this->memRefs++;
 
-                if (action == 'W') {
+                if ( !tlbHit && !ptHit) {
                     for (int i = 0; i < conf->L2Sets; i++) {
                         s = this->L2->sets.at(i);
 
                         for (int j = 0; j < s->blocks.size(); j++) {
                             temp = s->blocks.at(j);
-
-                            if (temp->ppn == blk->ppn && blk != temp && !tlbHit && !ptHit) {
+                            if (temp->ppn == blk->ppn && blk != temp) {
                                 // cout << "writing back L2 line with tag " << hex << temp->tag << " and index " << hex << temp->index << " to main memory" << endl;
-                                this->L2->memrefs++;
+
+                                // If there's an invalid L2 cache that needs to be written down, then it is simply another memory reference
+                                this->memRefs++;
                             }
                         }
                     }
+                }
+
+                // If L2 needs to write an evicted block to main memory, increment memRefs and reset 
+                if (this->L2->writeBlock) {
+                    this->memRefs++;
+                    this->L2->writeBlock = false;
                 }
             }
         } else {
             printf("\n");
         }
-
-
     }
 
     cout << endl << "Simulation statistics" << endl << endl;
@@ -949,9 +897,9 @@ void Memory::processData(string source) {
     cout << "Total writes     : " << this->writes << endl;
     printf("Ratio of reads   : %.6f\n\n", (float) this->reads / (float) (this->reads + this->writes));
 
-    cout << "main memory refs : " << this->L2->memrefs << endl;
+    cout << "main memory refs : " << this->memRefs << endl;
     cout << "page table refs  : " << this->pt->hits + this->pt->misses << endl;
-    cout << "disk refs        : " << this->pt->misses << endl;
+    cout << "disk refs        : " << this->diskRefs << endl;
 }
 
 Block *createBlock(uint64_t addr, uint64_t offset, uint64_t index, uint64_t tag, uint64_t ppn) {
