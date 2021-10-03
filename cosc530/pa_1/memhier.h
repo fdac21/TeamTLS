@@ -130,7 +130,6 @@ public:
     DataCache(Config *conf);
     void initFrame();
     void replaceBlock(Set *s, int i, Block *blk, Block *resident);
-    void invalidateBlock(uint64_t ppn);
     bool processBlock(Block *blk, char action);
 };
 
@@ -151,8 +150,7 @@ public:
     L2Cache(Config *conf);
     void initFrame();
     void replaceBlock(Set *s, int i, Block *blk, Block *resident);
-    void invalidateBlock(uint64_t ppn);
-    bool processBlock(Block *blk, char action);
+    bool processBlock(Block *blk, char action, bool update);
 };
 
 // Cache 

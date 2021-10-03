@@ -1,0 +1,25 @@
+write at 00000c84
+
+write at 0000081c
+
+write at 0000014c
+
+write at 00000c84
+
+write at 00000400
+writing back DC line with tag 4 and index 0 to L2 cache
+
+write at 00000148
+
+write at 00000144
+writing back DC line with tag 18 and index 0 to L2 cache
+
+write at 00000c80
+writing back DC line with tag 12 and index 0 to L2 cache
+
+write at 00000008
+writing back DC line with tag 8 and index 3 to L2 cache
+invalidating DC line with tag 8 and index 3 since phys page 1 is being replaced
+writing back DC line with tag 12 and index 1 to L2 cache
+invalidating L2 line with tag 1 and index 1 since phys page 1 is being replaced
+
