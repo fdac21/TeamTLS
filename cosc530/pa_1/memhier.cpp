@@ -304,6 +304,7 @@ bool DataCache::processBlock(Block *blk, char action) {
             // Write-Back/Write-Allocate
             else if (action == 'W' && !this->writeThrough) {
                 resident->dirty = true;
+                blk->dirty = true;
                 move(s->blocks, i, 0);
             } 
             // Write-Through/No Write-Allocate
@@ -313,6 +314,7 @@ bool DataCache::processBlock(Block *blk, char action) {
             return true;
         }
     }
+    // Cache Miss
     if (s->blocks.size() < this->setSize) {
         
         // Cache Miss with room to insert
@@ -322,25 +324,28 @@ bool DataCache::processBlock(Block *blk, char action) {
         }
         // Write-Back/Write-Allocate
         else if (action == 'W' && !this->writeThrough)  {
-            // blk->dirty = true;
-            // TODO Determine if I need to write out the LRU block if it's not being evicted
-            if (resident != NULL && resident->dirty) {
-                this->write = createBlock(resident->address, resident->offset, resident->index, resident->tag, resident->ppn, resident->valid);
-                this->write->dirty = resident->dirty;
-            }
+            blk->dirty = true;
             s->blocks.insert(s->blocks.begin(), blk);
         } 
     } else {
         i--;
         // Cache Miss
         if (action == 'R') {
+            // Write back the resident block if it's dirty
+            if (resident->dirty) {
+                this->write = createBlock(resident->address, resident->offset, resident->index, resident->tag, resident->ppn, resident->valid);
+                this->write->dirty = resident->dirty;
+            }
             this->replaceBlock(s, i, blk, resident);
         } 
         // Write-Back/Write-Allocate
         else if (action == 'W' && !this->writeThrough)  {
-            // blk->dirty = true;
-            this->write = createBlock(resident->address, resident->offset, resident->index, resident->tag, resident->ppn, resident->valid);
-            this->write->dirty = resident->dirty;
+            // Write back the resident block if it's dirty
+            if (resident->dirty) {
+                this->write = createBlock(resident->address, resident->offset, resident->index, resident->tag, resident->ppn, resident->valid);
+                this->write->dirty = resident->dirty;
+            }
+            blk->dirty = true;
             this->replaceBlock(s, i, blk, resident);
         } 
         // Don't update cache on Write-Through/No Write-Allocate
@@ -390,7 +395,7 @@ void L2Cache::replaceBlock(Set *s, int i, Block *blk, Block *resident) {
 }
 
 // TODO: Make sure sets doesn't need to be a vector of pointers
-bool L2Cache::processBlock(Block *blk, char action, bool update) {
+bool L2Cache::processBlock(Block *blk, char action, updateType update) {
     Set *s = NULL;
     Block  *resident = NULL;
     int i;
@@ -402,7 +407,7 @@ bool L2Cache::processBlock(Block *blk, char action, bool update) {
 
         // Cache Hit
         if (resident->tag == blk->tag && resident->valid) {
-            this->hits++;
+            if (update != MULTI) this->hits++;
             
             // Read
             if (action == 'R') move(s->blocks, i, 0);
@@ -426,26 +431,42 @@ bool L2Cache::processBlock(Block *blk, char action, bool update) {
             s->blocks.insert(s->blocks.begin(), blk);
         } 
         // Update if a block is being written from DC
-        else if (action == 'W' && (!this->writeThrough || update))  {
-            // blk->dirty = true;
+        else if (action == 'W' && (!this->writeThrough || update != NONE))  {
+            blk->dirty = true;
             s->blocks.insert(s->blocks.begin(), blk);
         }
     } else {
         i--;
         // Cache Miss
         if (action == 'R') {
+            if (resident->dirty) this->writeBlock = true;
             this->replaceBlock(s, i, blk, resident);
-        }  else if (action == 'W' && (!this->writeThrough || update))  {
-            // blk->dirty = true;
-            this->writeBlock = true;
+        }  else if (action == 'W' && (!this->writeThrough || update != NONE))  {
+            blk->dirty = true;
+            if (resident->dirty) this->writeBlock = true;
             this->replaceBlock(s, i, blk, resident);
         }
     }
 
-    this->misses++;
+    if (update != MULTI) this->misses++;
     return false;
 }
 
+void L2Cache::printCache(ofstream &f) {
+    Block *L2temp;
+    Set *s;
+    for (int i = 0; i < this->nSets; i++) {
+        s = this->sets.at(i);
+
+        for (int j = 0; j < s->blocks.size(); j++) {
+            L2temp = s->blocks.at(j);
+ 
+            f << "Entry #: " << j   << " PPN: " << L2temp->ppn << " Tag: " << L2temp->tag;
+            f <<  " Index: " << L2temp->index << endl;
+
+        }
+    }
+}
 
 /* End L2Cache Functions */
 
@@ -458,6 +479,7 @@ PageTable::PageTable(Config *conf) {
     this->index = conf->ptOffset + conf->ptIndex;
     this->hits = 0;
     this->misses = 0;
+    this->invalidPPN = -1;
     this->pPageEntries.resize(vPages);
     entries.reserve(this->pPages);
 
@@ -467,44 +489,50 @@ PageTable::PageTable(Config *conf) {
 
 bool PageTable::processPTE(PageTableEntry *pte) {
     PageTableEntry *resident;
-    uint64_t i = 0;
+
+
+    for (int i = 0; i < this->entries.size(); i++) {
+        resident = this->entries.at(i);
+
+        // Move the PTE to the front of the entries vector on a hit
+        if (resident->vpn == pte->vpn && resident->valid) {
+            this->hits++;
+            move(this->entries, i, 0);
+            move(this->pPageEntries, i, 0);
+            pte->ppn = resident->ppn;
+            return true;
+        } 
+    }
+
 
     // If there's a free PTE, insert the PTE
     if (this->entries.size() < this->vPages) {
-        for (; i < this->entries.size(); i++) {
-            resident = this->entries.at(i);
-
-            // Move the PTE to the front of the entries vector on a hit
-            if (resident->vpn == pte->vpn) {
-                this->hits++;
-                move(this->entries, i, 0);
-                move(this->pPageEntries, i, 0);
-                pte->ppn = resident->ppn;
-                return true;
-            } 
-        }
         pte->ppn = this->pPageEntries.at(this->pPages - 1);
+        // Invalidate entries sharing the same ppn
+        for (int i = 0; i < this->entries.size(); i++) {
+            if (entries.at(i)->ppn == pte->ppn) entries.at(i)->valid = false;
+        }
         move(this->pPageEntries, this->pPages - 1, 0);
         this->entries.insert(this->entries.begin(), pte);
     } else {
-        for (i = 0; i < this->entries.size(); i++) {
-            resident = this->entries.at(i);
-            // Move the PTE to the front of the set on a read hit
-            if (resident->vpn == pte->vpn) {
-                this->hits++;
-                move(this->entries, i, 0);
-                move(this->pPageEntries, i, 0);
-                pte->ppn = resident->ppn;
-                return true;
-            } 
-        } 
         // If there's not a matching PTE then it's a miss 
         pte->ppn = resident->ppn;
         this->entries.pop_back();
         this->entries.insert(this->entries.begin(), pte);
     }
+
     this->misses++;
     return false;
+}
+
+void PageTable::printTable(ofstream& f) {
+
+    for (int i = 0; i < this->entries.size(); i++) {
+        f << "VPN: " << hex << this->entries.at(i)->vpn << " Page Offset: " << hex << this->entries.at(i)->offset << " PPN: " << hex << this->entries.at(i)->ppn << endl;
+    }
+
+    f << endl;
+
 }
 
 /* End Page Table Functions */
@@ -604,14 +632,15 @@ void Memory::processData(string source) {
     string line;
     char action;
     uint64_t addr, offset, pageNumber, index, tag;
-    bool dcHit, ptHit, tlbHit;
-    Block *blk;
+    bool dcHit, ptHit, tlbHit, dcUpdate;
+    Block *dcBlk, *L2Blk, *blk;
     PageTableEntry *pte;
     Set *s;
     Block *invalid = NULL, *temp, *L2temp;
 
-    ofstream f;
+    ofstream f, debug;
     f.open("trace.log");
+    debug.open("debug.log");
 
 
     while(cin >> line) {
@@ -636,6 +665,7 @@ void Memory::processData(string source) {
                 this->diskRefs++;
             }
 
+            // this->pt->printTable(debug);
 
             pte->paddress = pte->offset | (pte->ppn << this->conf->ptOffset);
 
@@ -687,201 +717,175 @@ void Memory::processData(string source) {
         index = getPortion(addr, this->dc->offset, this->dc->index);
         tag = getPortion(addr, this->dc->index, 64);
 
-        blk = createBlock(addr, offset, index, tag, (this->conf->vAddr) ? pte->ppn : pte->vpn);
+        dcBlk = createBlock(addr, offset, index, tag, (this->conf->vAddr) ? pte->ppn : pte->vpn);
 
-        // If dc hit, print out information
-        if ((dcHit = this->dc->processBlock(blk, action))) {
-            printf("%6lx %3lx hit  ", blk->tag, blk->index);
+        // If DC hit, print out information
+        if (dcHit = this->dc->processBlock(dcBlk, action)) {
+            printf("%6lx %3lx hit  ", dcBlk->tag, dcBlk->index);
 
             // If L2 is off and dc has write through, access memory
-            if (!this->conf->L2 && this->dc->writeThrough) {
-                this->memRefs++;
-            }
-        } else {
-            // dc miss info
-            printf("%6lx %3lx miss ",  blk->tag, blk->index);
+            if (!this->conf->L2 && this->dc->writeThrough) this->memRefs++;
             
-            // If L2 is on
-            if(this->conf->L2) {
+        } else {
+            // DC Miss
+            printf("%6lx %3lx miss ",  dcBlk->tag, dcBlk->index);
+        }
+        
+        // Multilevel inclusion check
+        if (this->dc->writeThrough) {
+            dcUpdate = (action == 'R' && !dcHit) || (action == 'W' && dcHit);
+        } else {
+            dcUpdate = !(action == 'R' && dcHit);
+        }
 
-                // Check for any invalid entries on page fault
-                if (!tlbHit && !ptHit) {
-                    // Check for any invalidated blocks and write them to L2 if found
-                    for (int i = 0; i < conf->dcSets; i++) {
-                        s = this->dc->sets.at(i);
+        if (this->conf->L2) {
+            // Check if the next level is to be accessed
 
-                        for (int j = s->blocks.size() - 1; j >= 0; j--) {
-                            temp = s->blocks.at(j);
+            if (!dcHit || this->dc->writeThrough) {
+                offset = getPortion(addr, 0, this->L2->offset);
+                index = getPortion(addr, this->L2->offset, this->L2->index);
+                tag = getPortion(addr, this->L2->index, 64);
+                L2Blk = createBlock(addr, offset, index, tag, (this->conf->vAddr) ? pte->ppn : pte->vpn);
+                
+                // Process block in L2 cache
+                if (this->L2->processBlock(L2Blk, action, NONE)) {
+                    printf("%6lx %3lx hit \n", L2Blk->tag, L2Blk->index);
+                    // TODO fix logic
+                    if (this->L2->writeThrough && this->dc->writeThrough) this->memRefs++;
+                } else {
+                    // L2 Miss
+                    printf("%6lx %3lx miss\n", L2Blk->tag, L2Blk->index);
+                    // This is the lowest cache so the next access would be to memory
+                    this->memRefs++;
+                }
+            } else {
+                printf("\n");
+            }
 
-                            // Invalidate entry sharing the same ppn that is not the new block
-                            if (temp->ppn == blk->ppn && blk != temp) {
+            // Check for invalidated DC blocks
+            if (!tlbHit && !ptHit) {
+                // Check for any invalidated blocks and write them to L2 if found
+                for (int i = 0; i < conf->dcSets; i++) {
+                    s = this->dc->sets.at(i);
+
+                    for (int j = s->blocks.size() - 1; j >= 0; j--) {
+                        temp = s->blocks.at(j);
+
+                        // Invalidate entry sharing the same ppn that is not the new block
+                        if (temp->ppn == dcBlk->ppn && dcBlk != temp && temp->valid) {
+                            
+                            if (temp->dirty && !this->dc->writeThrough) {
+                                offset = getPortion(addr, 0, this->L2->offset);
                                 index = getPortion(temp->address, this->L2->offset, this->L2->index);
                                 tag = getPortion(temp->address, this->L2->index, 64);
                                 invalid = createBlock(temp->address, offset, index, tag, temp->ppn, temp->valid);
                                 invalid->dirty = temp->dirty;
                                 f << "writing back DC line with tag " << hex << temp->tag << " and index " << hex << temp->index << " to L2 cache" << endl;
-                                f << "invalidating DC line with tag " << hex << temp->tag << " and index " << hex << temp->index << " since phys page " << hex << blk->ppn << " is being replaced" << endl;
 
                                 // Attempt write back
-                                if (!this->L2->processBlock(invalid, action, true)) {
-
+                                if (!this->L2->processBlock(invalid, action, WRITEBACK)) {
                                     this->memRefs++;
-
-                                    if (!tlbHit && !ptHit) {
-                                        for (int i = 0; i < conf->L2Sets; i++) {
-                                            s = this->L2->sets.at(i);
-
-                                            for (int j = 0; j < s->blocks.size(); j++) {
-                                                L2temp = s->blocks.at(j);
-                                                if (L2temp->ppn == blk->ppn && blk != L2temp && L2temp->valid) {
-                                                    if (!this->L2->writeThrough) {
-                                                        f << "writing back L2 line with tag " << hex << L2temp->tag << " and index " << hex << L2temp->index << " to main memory" << endl;
-
-                                                        this->memRefs++;
-                                                    }
-                                                    f << "invalidating L2 line with tag " << hex << L2temp->tag << " and index " << hex << L2temp->index << " since phys page " << hex << blk->ppn << " is being replaced" << endl;
-                                                    L2temp->valid = false;
-                                                }
-                                            }
-                                        }
-                                    } else {
-                                        if (this->L2->writeThrough) this->memRefs++;
-                                    }
-
-                                    // If L2 needs to write an evicted block to main memory, increment memRefs and reset L2 writeBlock
-                                    if (this->L2->writeBlock) {
-                                        this->memRefs++;
-                                        this->L2->writeBlock = false;
-                                    }
-   
+                                } else {
+                                    if (this->L2->writeThrough) this->memRefs++;
                                 }
 
-                                invalid->valid = false;
-                                move(s->blocks, j, s->blocks.size() - 1);
                             }
+                        
+                            f << "invalidating DC line with tag " << hex << temp->tag << " and index " << hex << temp->index << " since phys page " << hex << dcBlk->ppn << " is being replaced" << endl;
+                            temp->valid = false;
+                            move(s->blocks, j, s->blocks.size() - 1);
                         }
                     }
                 }
                 
-                
-                // If there is a block that needs to be written back from write-back policy, write it to L2 cache
-                if (this->dc->write != NULL) {
-                    index = getPortion(this->dc->write->address, this->L2->offset, this->L2->index);
-                    tag = getPortion(this->dc->write->address, this->L2->index, 64);
-                    blk = createBlock(this->dc->write->address, offset, index, tag, this->dc->write->ppn, this->dc->write->valid);
-                    blk->dirty = this->dc->write->dirty;
-                    f << "writing back DC line with tag " << hex << this->dc->write->tag << " and index " << hex << this->dc->write->index << " to L2 cache" << endl;
-                    
-                    // Handle cases where write back causes miss
-                    if(!this->L2->processBlock(blk, action, !this->dc->writeThrough)) {
-                        this->memRefs++;
+                // Check for any invalidated L2 blocks and write them to memory if found
+                for (int i = 0; i < conf->L2Sets; i++) {
+                    s = this->L2->sets.at(i);
 
-                        if ( !tlbHit && !ptHit) {
-                            for (int i = 0; i < conf->L2Sets; i++) {
-                                s = this->L2->sets.at(i);
+                    for (int j = s->blocks.size() - 1; j >= 0; j--) {
+                        L2temp = s->blocks.at(j);
+                        if (L2temp->ppn == L2Blk->ppn && L2Blk != L2temp && L2temp->valid) {
+                            if (!this->L2->writeThrough && L2temp->dirty) {
+                                f << "writing back L2 line with tag " << hex << L2temp->tag << " and index " << hex << L2temp->index << " to main memory" << endl;
 
-                                for (int j = s->blocks.size() - 1; j >= 0; j--) {
-                                    temp = s->blocks.at(j);
-                                    if (temp->ppn == blk->ppn && blk != temp) {
-                                        f << "writing back L2 line with tag " << hex << temp->tag << " and index " << hex << temp->index << " to memory" << endl;
-
-                                        // If there's an invalid L2 cache that needs to be written down, then it is simply another memory reference
-                                        this->memRefs++;
-                                        temp->valid = false;
-                                        move(s->blocks, j, s->blocks.size() - 1);
-                                    }
-                                }
-                            }
-                        } else {
-                            if (this->L2->writeThrough) this->memRefs++;
-                        }
-
-                        // If L2 needs to write an evicted block to main memory, increment memRefs and reset 
-                        if (this->L2->writeBlock) {
-                            this->memRefs++;
-                            this->L2->writeBlock = false;
-                        }
-                    }
-                    this->dc->write = NULL;
-                }
-            } else {
-                // If L2 is inactive, next access is memory
-                this->memRefs++;
-
-                //  If L2 is inactive, check for any invalidated blocks and write to main memory instead
-                if (!tlbHit && !ptHit) {
-                    for (int i = 0; i < conf->dcSets; i++) {
-                        s = this->dc->sets.at(i);
-
-                        for (int j = s->blocks.size() - 1; j >= 0; j--) {
-                            temp = s->blocks.at(j);
-
-                            if (temp->ppn == blk->ppn && blk != temp) {
-                                f << "writing back DC line with tag " << hex << temp->tag << " and index " << hex << temp->index << " to memory" << endl;
                                 this->memRefs++;
-                                f << "invalidating DC line with tag " << hex << temp->tag << " and index " << hex << temp->index << " since phys page " << hex << blk->ppn << " is being replaced" << endl;
-                                temp->valid = false;
-                                move(s->blocks, j, s->blocks.size() - 1);
                             }
+                            f << "invalidating L2 line with tag " << hex << L2temp->tag << " and index " << hex << L2temp->index << " since phys page " << hex << L2Blk->ppn << " is being replaced" << endl;
+                            L2temp->valid = false;
+                            move(s->blocks, j, s->blocks.size() - 1);
                         }
                     }
                 }
-                // If L2 is inactive and there is a block that needs to be written back, write to main memory instead
-                if (this->dc->write != NULL) {                    
-
-                    f << "writing back DC line with tag " << hex << this->dc->write->tag << " and index " << hex << this->dc->write->index << " to memory" << endl;
-                    this->memRefs++;
-                }
             }
-        }
-        
+
+            // If there is a block that needs to be written back from write-back policy, write it to L2 cache
+            if (this->dc->write != NULL) {
+                offset = getPortion(this->dc->write->address, 0, this->L2->offset);
+                index = getPortion(this->dc->write->address, this->L2->offset, this->L2->index);
+                tag = getPortion(this->dc->write->address, this->L2->index, 64);
+                L2Blk = createBlock(this->dc->write->address, offset, index, tag, this->dc->write->ppn, this->dc->write->valid);
+                L2Blk->dirty = this->dc->write->dirty;
+                f << "writing back DC line with tag " << hex << this->dc->write->tag << " and index " << hex << this->dc->write->index << " to L2 cache" << endl;
 
 
-        if (this->conf->L2 && (!dcHit || this->dc->writeThrough)) {
-            offset = getPortion(addr, 0, this->L2->offset);
-            index = getPortion(addr, this->L2->offset, this->L2->index);
-            tag = getPortion(addr, this->L2->index, 64);
-            blk = createBlock(addr, offset, index, tag, (this->conf->vAddr) ? pte->ppn : pte->vpn);
+                // Handle cases where write back causes miss
+                if(!this->L2->processBlock(L2Blk, action, WRITEBACK)) {
+                    this->memRefs++;
+                } else {
+                    // L2 hit
+                    if (this->L2->writeThrough) this->memRefs++;
+                }
+                this->dc->write = NULL;
+            }
 
-            if (this->L2->processBlock(blk, action, !this->dc->writeThrough)) {
-                printf("%6lx %3lx hit \n", blk->tag, blk->index);
-                if (this->L2->writeThrough) this->memRefs++;
-            } else {
-                printf("%6lx %3lx miss\n", blk->tag, blk->index);
-                // This is the lowest cache so the next access would be to memory
+
+            // If L2 needs to write an evicted block to main memory, increment memRefs and reset 
+            if (this->L2->writeBlock) {
                 this->memRefs++;
+                this->L2->writeBlock = false;
+            }
+    
+            if (dcUpdate) {
+                offset = getPortion(addr, 0, this->L2->offset);
+                index = getPortion(addr, this->L2->offset, this->L2->index);
+                tag = getPortion(addr, this->L2->index, 64);
+                L2Blk = createBlock(addr, offset, index, tag, (this->conf->vAddr) ? pte->ppn : pte->vpn);
+                this->L2->processBlock(L2Blk, action, MULTI);
+            }
+        }
+        // else goto main memory
+        else {
+            printf("\n");
+            // If L2 is inactive, next access is memory
+            this->memRefs++;
 
-                if ( !tlbHit && !ptHit) {
-                    for (int i = 0; i < conf->L2Sets; i++) {
-                        s = this->L2->sets.at(i);
+            //  If L2 is inactive, check for any invalidated blocks and write to main memory instead
+            if (!tlbHit && !ptHit) {
+                for (int i = 0; i < conf->dcSets; i++) {
+                    s = this->dc->sets.at(i);
 
-                        for (int j = s->blocks.size() - 1; j >= 0; j--) {
-                            temp = s->blocks.at(j);
-                            if (temp->ppn == blk->ppn && blk != temp && temp->valid) {
-                                if (!this->L2->writeThrough) {
-                                    f << "writing back L2 line with tag " << hex << temp->tag << " and index " << hex << temp->index << " to main memory" << endl;
-                                    this->memRefs++;
-                                    // If there's an invalid L2 cache that needs to be written down, then it is simply another memory reference
-                                }
+                    for (int j = s->blocks.size() - 1; j >= 0; j--) {
+                        temp = s->blocks.at(j);
 
-                                f << "invalidating L2 line with tag " << hex << temp->tag << " and index " << hex << temp->index << " since phys page " << hex << blk->ppn << " is being replaced" << endl;
-                                temp->valid = false;
-                                move(s->blocks, j, s->blocks.size() - 1);
-                            }
+                        if (temp->ppn == dcBlk->ppn && dcBlk != temp) {
+                            f << "writing back DC line with tag " << hex << temp->tag << " and index " << hex << temp->index << " to memory" << endl;
+                            this->memRefs++;
+                            f << "invalidating DC line with tag " << hex << temp->tag << " and index " << hex << temp->index << " since phys page " << hex << dcBlk->ppn << " is being replaced" << endl;
+                            temp->valid = false;
+                            move(s->blocks, j, s->blocks.size() - 1);
                         }
                     }
                 }
-
-                // If L2 needs to write an evicted block to main memory, increment memRefs and reset 
-                if (this->L2->writeBlock) {
-                    this->memRefs++;
-                    this->L2->writeBlock = false;
-                }
             }
-        } else {
-            printf("\n");
+            // If L2 is inactive and there is a block that needs to be written back, write to main memory instead
+            if (this->dc->write != NULL) {                    
+                
+                f << "writing back DC line with tag " << hex << this->dc->write->tag << " and index " << hex << this->dc->write->index << " to memory" << endl;
+                delete this->dc->write;
+                this->dc->write = NULL;
+                this->memRefs++;
+            }
         }
-
         f << endl;
     }
 
@@ -923,6 +927,7 @@ void Memory::processData(string source) {
     cout << "disk refs        : " << this->diskRefs << endl;
 
     f.close();
+    debug.close();
 }
 
 Block *createBlock(uint64_t addr, uint64_t offset, uint64_t index, uint64_t tag, uint64_t ppn) {
@@ -955,9 +960,7 @@ PageTableEntry *createEntry(uint64_t address, Config *conf) {
     entry->paddress = 0;
     entry->offset = getPortion(address, 0, conf->ptOffset);
     entry->vpn = getPortion(address, conf->ptOffset, log2(conf->ptVPages) + conf->ptOffset);
-    // entry->used = false;
-    // entry->resident = false;
-    entry->dirty = false;
+    entry->valid = true;
 
     return entry;
 }

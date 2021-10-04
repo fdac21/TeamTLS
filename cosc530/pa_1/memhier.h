@@ -5,9 +5,13 @@
 #include "stdint.h"
 #include <string>
 #include <vector>
+#include <fstream>
 using std::string;
 using std::vector;
+using std::ofstream;
 
+
+enum updateType{NONE, WRITEBACK, MULTI};
 
 // Config
 class Config {
@@ -106,9 +110,11 @@ private:
 public:
     int hits;
     int misses;
+    int invalidPPN;
     PageTable(Config *conf);
     bool processPTE(PageTableEntry *pte);
     void virt2phys(PageTableEntry *pte);
+    void printTable(ofstream& f);
 };
 
 class DataCache {
@@ -150,7 +156,8 @@ public:
     L2Cache(Config *conf);
     void initFrame();
     void replaceBlock(Set *s, int i, Block *blk, Block *resident);
-    bool processBlock(Block *blk, char action, bool update);
+    bool processBlock(Block *blk, char action, updateType update);
+    void printCache(ofstream &f);
 };
 
 // Cache 
