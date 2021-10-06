@@ -1,35 +1,38 @@
-from Crypto.Util.number import getPrime, isPrime
-from math import gcd
+from Crypto.Util.number import bytes_to_long, getPrime, isPrime, long_to_bytes
+from binascii import hexlify
 
 BIT_LENGTH = 1024
 
 
-def fastExp(b, e, n):
-    product = 1
+def extended_euclidian(a, b):
+    px, py = 1, 0
+    x, y = 1, 1
 
-    while e > 0:
-        if e & 1:
-            product = (product * b) % n
-        b = (b * b) % n
-        e >>= 1
+    while True:
+        a, b = b, a % b
+        q = a // b
 
-    return product
+        x, px = px - q * x, x
+        y, py = py - q * y, y
+
+        if b == 1:
+            break
+
+    return a, px, py
 
 
-def EEGCD(a, b):
-    s, t = 0, 0
-
-    r = [(a, b)]
-    while t != 1:
-        r.append()
+def gcd(a, b):
+    while b != 0:
+        a, b = b, a % b
+    return a
 
 
 def generatePrime(bit_length):
 
     p = getPrime(bit_length)
 
-    # while (not (isPrime(p) and isPrime((p - 1) // 2))):
-    #     p = getPrime(bit_length)
+    while (not (isPrime(p))):
+        p = getPrime(bit_length)
 
     return p
 
@@ -41,12 +44,22 @@ def main():
 
         p = generatePrime(BIT_LENGTH)
         q = generatePrime(BIT_LENGTH)
+
         n = p * q
         totN = (p - 1) * (q - 1)
         if gcd(e, totN) == 1:
             break
 
-    print(gcd(e, totN))
+    _, _, d = extended_euclidian(e, totN)
+
+    m = "This is a secret test".encode()
+    m = bytes_to_long(m)
+    print(m)
+    c = pow(m, e, n)
+
+    m = pow(c, d, n)
+
+    print(c, long_to_bytes(m).decode('utf-8'))
 
 
 if __name__ == '__main__':
