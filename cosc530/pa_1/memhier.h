@@ -89,7 +89,6 @@ public:
     int hits;
     int misses;
     bool active;
-    Block *invalid;
     vector<Set *> sets;
     TLB(Config *conf);
     bool processData(Block *blk);
@@ -111,8 +110,9 @@ public:
     int hits;
     int misses;
     int invalidPPN;
+    bool dirtyEvict;
     PageTable(Config *conf);
-    bool processPTE(PageTableEntry *pte);
+    bool processPTE(PageTableEntry *pte, char action);
     void virt2phys(PageTableEntry *pte);
     void printTable(ofstream& f);
 };
@@ -122,7 +122,6 @@ protected:
     int nSets;
     int setSize;
     int lineSize;
-
 
 public:
     bool writeThrough;

@@ -1,31 +1,18 @@
-write at 00000bf4
+read at 00000c84
 
-read at 000003fc
+read at 0000081c
 
-write at 000008f7
-writing back DC line with tag 7 and index 2 to L2 cache
+read at 0000014c
 
-write at 000006f9
+read at 00000c84
 
-read at 000007f8
-invalidating L2 line with tag 0 and index f since phys page 0 is being replaced
-writing back DC line with tag 1f and index 3 to L2 cache
+read at 00000400
 
-read at 000004fb
-invalidating L2 line with tag 1 and index f since phys page 1 is being replaced
+read at 00000148
 
-read at 00000bf4
-writing back DC line with tag 17 and index 2 to L2 cache
-invalidating DC line with tag 17 and index 2 since phys page 2 is being replaced
-invalidating L2 line with tag 2 and index f since phys page 2 is being replaced
+read at 00000144
 
-read at 00000cf3
-invalidating L2 line with tag 3 and index f since phys page 3 is being replaced
+read at 00000c80
 
-read at 00000ef1
-invalidating L2 line with tag 0 and index f since phys page 0 is being replaced
-
-write at 00000af5
-invalidating DC line with tag f and index 3 since phys page 1 is being replaced
-invalidating L2 line with tag 1 and index f since phys page 1 is being replaced
+read at 00000008
 

@@ -9,7 +9,7 @@ all: memhier
 	$(CC) -c -o $@ $< $(CFLAGS)
 
 memhier: memhier.o 
-	$(CC) -o $@ $^ $(CFLAGS) -lm
+	$(CC) -o $@ $^ $(CFLAGS) 
 
 .PHONY: clean
 
