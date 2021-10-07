@@ -8,17 +8,16 @@
 using namespace std;
 
 int main() {
-    vector<string> msg{"Hello", "C++", "World", "from", "VS Code", "and the C++ extension!"};
-    BufferConfig buf = BufferConfig("config.txt", "buffer");
-
-    for (const string& word : msg) {
-        cout << word << " ";
-    }
-    cout << endl;
+    initScheduler(NULL, NULL);
 }
 
-void initScheduler(Buffer* buf, Latency lat*) {
-    string source = "config.txt";
+void getValue(fstream& f, string& line) {
+    getline(f, line, ':');
+    getline(f, line);
+}
+
+void initScheduler(Buffer* buf, Latency* lat) {
+    string source = "source/config.txt";
     string buffer = "buffer";
     string latency = "latency";
     string line;
@@ -27,12 +26,17 @@ void initScheduler(Buffer* buf, Latency lat*) {
 
     conf.open(source);
 
-    if (!f.is_open()) {
+    if (!conf.is_open()) {
         perror("Error opening config file.\n");
         exit(-1);
     }
 
-    while (getline(conf))
-}
+    while (getline(conf, line) && line != "buffers")
+        ;
 
-Buffer::Buffer()
+    getline(conf, line);
+
+    getValue(conf, line);
+
+    cout << line << endl;
+}
