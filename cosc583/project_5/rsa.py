@@ -1,5 +1,4 @@
 from Crypto.Util.number import bytes_to_long, getPrime, isPrime, long_to_bytes
-from binascii import hexlify
 
 BIT_LENGTH = 1024
 
@@ -37,24 +36,49 @@ def generatePrime(bit_length):
     return p
 
 
-def main():
-    e = 65537
+def gcdExtended(a, b):
+    # Base Case
+    if a == 0:
+        return b, 0, 1
+    c = b % a
+    if (a != 0 and c != 0 and a % c != 0):
 
+        print(f'{a} = {c} * {a // c} + {a % c}')
+
+    gcd, x1, y1 = gcdExtended(b % a, a)
+
+    # Update x and y using results of recursive
+    # call
+    x = y1 - (b//a) * x1
+    y = x1
+
+    return gcd, x, y
+
+
+def main():
+    es = range(3, 6)
+    e = 0
     while True:
 
-        p = generatePrime(BIT_LENGTH)
-        q = generatePrime(BIT_LENGTH)
-
+        # p = generatePrime(BIT_LENGTH)
+        # q = generatePrime(BIT_LENGTH)
+        p, q = 13, 17
         n = p * q
         totN = (p - 1) * (q - 1)
-        if gcd(e, totN) == 1:
+        for i in es:
+            e = i
+            if gcd(e, totN) == 1:
+                break
+        if e != 0:
             break
-
     _, _, d = extended_euclidian(e, totN)
+    gcdExtended(e, totN)
 
     print("Prime p: ", p)
 
     print("Prime q: ", q)
+
+    print("E: ", e)
 
     print("RSA Modulus n: ", n)
 
@@ -79,4 +103,13 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    # main()
+    # a, b = 40, 17
+    print(pow(807504161352, 112677787929391516643265970286600007391, 112677787929391516643265970286600007391)
+          )
+    # print(807504161352, 112677787929391516643265970286600007391)
+    # print(a, b)
+    # ex = list(gcdExtended(a, b))
+    # ex[-1] = ex[-1] if ex[-1] > 0 else a + ex[-1]
+    # # print(extended_euclidian(a, b))
+    # print(ex)
