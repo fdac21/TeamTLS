@@ -1,0 +1,14 @@
+{
+    "files.associations": {
+        "*.js": "javascriptreact",
+        "**/*.html": "html",
+        "**/templates/**/*.html": "django-html",
+        "**/templates/**/*": "django-txt",
+        "**/requirements{/**,*}.{txt,in}": "pip-requirements",
+        "*.tcc": "cpp",
+        "string": "cpp",
+        "istream": "cpp",
+        "iosfwd": "cpp",
+        "vector": "cpp"
+    }
+}
