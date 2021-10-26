@@ -1,5 +1,6 @@
 #include "dynamsched.hpp"
 
+#include <deque>
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -10,12 +11,21 @@ using namespace std;
 
 int main() {
     DynamSched sched = DynamSched("source/config.txt");
+    sched.process();
+
+    return 0;
 }
 
-void getValue(fstream& f, string& line, stringstream& ss) {
+int getValue(fstream& f) {
+    string line;
+    stringstream ss;
+    int val;
     getline(f, line, ':');
     getline(f, line);
     ss << line;
+    ss >> val;
+
+    return val;
 }
 
 DynamSched::DynamSched(string configFile) {
@@ -45,19 +55,27 @@ DynamSched::DynamSched(string configFile) {
     this->allocateBuffer(conf, this->fpMuls);
 
     // Allocate Int Buffer
-    this->allocateBuffer(conf, this->Ints);
+    this->allocateBuffer(conf, this->arithmetics);
 
     // Allocate Reorder Buffer
-    this->allocateBuffer(conf, this->reorder);
+    this->allocateReorderBuffer(conf);
+
+    // Set Latencies
+    this->setLatencies(conf);
+
+    // Allocate Floating-Point Registers
+    this->allocateRegisters(this->fps);
+
+    // Allocate Integer Registers
+    this->allocateRegisters(this->ints);
+
+    cout << this->latencies.fp_add << endl;
 }
 
 void DynamSched::allocateBuffer(fstream& conf, vector<ResStation>& buffer) {
-    string line;
-    stringstream ss;
     int size = 0;
 
-    getValue(conf, line, ss);
-    ss >> size;
+    size = getValue(conf);
 
     buffer.resize(size);
 
@@ -66,6 +84,51 @@ void DynamSched::allocateBuffer(fstream& conf, vector<ResStation>& buffer) {
     }
 }
 
-ResStation::ResStation() {
-    this->instruction = 0;
+void DynamSched::allocateReorderBuffer(fstream& conf) {
+    int size = 0;
+
+    size = getValue(conf);
+
+    this->reorder.resize(size);
+
+    for (int i = 0; i < this->reorder.size(); i++) this->reorder.at(i) = NULL;
 }
+
+void DynamSched::setLatencies(fstream& conf) {
+    int cycles;
+
+    cycles = getValue(conf);
+    this->latencies.fp_add = cycles;
+
+    cycles = getValue(conf);
+    this->latencies.fp_sub = cycles;
+
+    cycles = getValue(conf);
+    this->latencies.fp_mul = cycles;
+
+    cycles = getValue(conf);
+    this->latencies.fp_div = cycles;
+}
+
+void DynamSched::allocateRegisters(vector<Register>& registers) {
+    registers.resize(16);
+    for (int i = 0; i < 16; i++) {
+        registers.at(i) = Register();
+    }
+}
+
+void DynamSched::process() {}
+
+/* Reorder Buffer */
+
+ReorderBuffer::ReorderBuffer(int size) { this->size = size; }
+
+void ReorderBuffer::commitEntry() {
+    // Remove entry at head of buffer and commit the results
+    // Possibly return Entry to caller and take care of scheduler interaction
+    // outside of buffer
+}
+
+/* End Reorder Buffer */
+
+ResStation::ResStation() {}
