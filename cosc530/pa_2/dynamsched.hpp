@@ -45,6 +45,7 @@ class ResStation {
     Instruction *instruction;
     int val1, val2;
     int immediate;
+    uint64_t address;
     bool busy;
     ResStation *RS1, *RS2;
 
