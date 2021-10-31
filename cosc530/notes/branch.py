@@ -42,8 +42,10 @@ class CorrelationPredictor():
 
     def updateHistory(self, taken, buffer=""):
         if (self.m > 0):
-            self.state[buffer]["shift"] = self.state[buffer]["shift"][1:] + \
-                ["1" if taken else "0"]
+            # self.state[buffer]["shift"] = self.state[buffer]["shift"][1:] + \
+            #     ["1" if taken else "0"]
+            self.state[buffer]["shift"] = ["1" if taken else "0"] + \
+                self.state[buffer]["shift"][:-1]
 
     def incrementHits(self, taken, buffer=""):
         self.state[buffer]["hits"] += 1
@@ -59,9 +61,9 @@ class CorrelationPredictor():
         index = self.getPIndex(buffer)
         res = self.predict(buffer)
 
-        # if (buffer == "b1"):
-        #     print(buffer, self.state[buffer]["shift"],
-        #           self.state[buffer]["predictors"], "hit" if res == taken else "miss")
+        if (buffer == "b1"):
+            print(buffer, self.state[buffer]["shift"],
+                  self.state[buffer]["predictors"], "hit" if res == taken else "miss")
 
         if self.bits == 1:
             a, b = [0], [1]
