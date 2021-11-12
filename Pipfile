@@ -15,6 +15,7 @@ nbformat = "*"
 ipykernel = "*"
 notebook = "*"
 requests = "*"
+pymongo = "*"
 
 [requires]
 python_version = "3.9"
