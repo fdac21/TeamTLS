@@ -15,7 +15,7 @@ with open("ten_thousand_com.txt", "r") as rf, open("website_data.json", 'w') as 
 
     website_number = 0
     current_connections = 0
-    max_connections = 5
+    max_connections = 25
 
     for url in nextURL(rf):
 
@@ -33,8 +33,6 @@ with open("ten_thousand_com.txt", "r") as rf, open("website_data.json", 'w') as 
 
                 response = requests.get(f"https://api.ssllabs.com/api/v3/analyze?host=https://{website}&all=on&fromCache=on")
 
-                print(response)
-
                 if (response.json()["status"] == "READY"):
                     wf.write(response.text + '\n')
                     website_queue.remove(website)
@@ -42,8 +40,7 @@ with open("ten_thousand_com.txt", "r") as rf, open("website_data.json", 'w') as 
                 if (response.json()["status"] == "ERROR"):
                     website_queue.remove(website)
 
-                print(response.headers, max_connections)
-                max_connections = response.headers['X-Max-Assessments']
+                max_connections = int(response.headers['X-Max-Assessments']) - 1
                 sleep(2)
             except:
                 pass
