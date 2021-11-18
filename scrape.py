@@ -54,7 +54,15 @@ def scrape():
 
 
 def clean_list():
-    pass
+    with open("website_data.json") as d, open("ten_thousand_com.txt") as lst, open("filtered_list.txt", "w+") as nlst:
+        lines = [line.strip() for line in lst.readlines()]
+        for line in d.readlines():
+            data = json.loads(line)
+            host = data["host"].split("https://")[1]
+            res = data["endpoints"][0]["statusMessage"]
+            if host in lines and "Unable to connect to the server" in res:
+                print(host)
+                nlst.write(host + "\n")
 
 
 if __name__ == '__main__':
