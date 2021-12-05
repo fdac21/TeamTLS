@@ -1,7 +1,9 @@
+#!/usr/bin/env python
 import requests
 import datetime
 from time import sleep
 import json
+from pathlib import Path
 
 
 def nextURL(f):
@@ -55,25 +57,63 @@ def scrape():
             current_queue = []
 
 
-def clean_list():
-    with open("website_data.json") as d, open("ten_thousand_com.txt") as lst, open("filtered_list.txt", "w+") as nlst:
-        lines = [line.strip() for line in lst.readlines()]
-        for line in d.readlines():
-            data = json.loads(line)
-            host = data["host"].split("https://")[1]
-            res = data["endpoints"][0]["statusMessage"]
-            if host in lines and "Unable to connect to the server" in res:
-                print(host)
-                bad_hosts.append(host)
+# def clean_list():
+#     with open("website_data.json") as d, open("ten_thousand_com.txt") as lst, open("filtered_list.txt", "w+") as nlst:
+#         lines = [line.strip() for line in lst.readlines()]
+#         for line in d.readlines():
+#             data = json.loads(line)
+#             host = data["host"].split("https://")[1]
+#             res = data["endpoints"][0]["statusMessage"]
+#             if host in lines and "Unable to connect to the server" in res:
+#                 print(host)
+#                 bad_hosts.append(host)
 
-        lines = [line.strip() for line in lst.readlines()]
+#         lines = [line.strip() for line in lst.readlines()]
 
-        for line in lines:
-            if line not in hosts and line not in bad_hosts:
-                print(line)
-                nlst.write(line + "\n")
+#         for line in lines:
+#             if line not in hosts and line not in bad_hosts:
+#                 print(line)
+#                 nlst.write(line + "\n")
+
+def get_json_path(directory, data_type=""):
+    path = Path(directory)
+    exts = [".json"]
+
+    # Search within **/*
+    for p in path.rglob('*'):
+        if '.git' not in str(p.parent) and p.suffix in exts and data_type in p.name:
+            yield p.resolve()
+
+
+def aggregate_data():
+    website_found = []
+    with open("ten_thousand_com.txt") as wf:
+        websites = [[w, False] for w in wf.read().splitlines()][1000:]
+
+        for path in get_json_path(".", "website"):
+            with path.open() as df, open("aggregate_data.json", "w") as agg, open("missing.txt", "w") as m:
+                lines = df.read().splitlines()
+                for index, entry in enumerate(websites):
+                    website, found = entry
+                    for line in lines:
+                        data = json.loads(line)
+                        if website in data.keys() and not found:
+
+                            data[website]["rank"] = index + 1001
+                            websites[index][1] = True
+                            if index == 9999:
+                                agg.write(json.dumps(data))
+                            else:
+                                agg.write(json.dumps(data) + ",")
+
+                        if websites[index][1]:
+                            continue
+        for website, found in websites:
+            if not found:
+                m.write(f"{website}\n")
 
 
 if __name__ == '__main__':
-    clean_list()
+    # clean_list()
     # scrape()
+    aggregate_data()
