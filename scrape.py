@@ -10,31 +10,46 @@ def nextURL(f):
 
 
 def scrape():
-    with open("ten_thousand_com.txt") as rf, open("website_data.json", 'a') as wf, open("errors.json", 'a') as ef:
+    with open("ten_thousand_com.txt") as rf, open("website_data9000.json", 'a') as wf, open("errors9000.json", 'a') as ef:
 
         website_queue = []
         current_queue = []
 
-        website_number = 1000
+        website_number = 9961
         max_connections = 25
+        stop = False
         urlGen = nextURL(rf)
 
         while True:
 
             url = ""
 
-            if len(website_queue) < max_connections:
-                url = next(urlGen)
-                if len(url) == 0:
-                    break
-                website_number += 1
-                website_queue.append((url, website_number))
-            else:
-                current_queue = website_queue
+            if len(website_queue) < max_connections and not stop:
+                
+                try:
+                    url = next(urlGen)
+                    website_number += 1
+                    website_queue.append((url, website_number))
+                except:
+                    stop = True
+
+            current_queue = website_queue
+
+            if stop and len(current_queue) == 0:
+                break
+
+            outstanding_connections = 0
 
             for website, rank in current_queue:
 
+                outstanding_connections += 1
+
+                if outstanding_connections >= max_connections:
+                    break
+
                 try:
+
+
                     print(
                         f"Fetching website: max={max_connections}: #={rank}: {website} at {datetime.datetime.now().strftime('%I:%M:%S')}")
 
