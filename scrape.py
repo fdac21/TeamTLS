@@ -10,46 +10,39 @@ def nextURL(f):
 
 
 def scrape():
-    with open("ten_thousand_com.txt") as rf, open("website_data.json", 'a') as wf, open("errors.json", 'a') as ef:
+    with open("ten_thousand_com.txt", "r") as rf, open("website_data.json", 'w') as wf:
 
         website_queue = []
         current_queue = []
 
-        website_number = 8781
+        website_number = 0
+        current_connections = 0
         max_connections = 25
-        urlGen = nextURL(rf)
 
-        while True:
+        for url in nextURL(rf):
 
-            url = ""
+            website_number += 1
 
-            if len(website_queue) < max_connections:
-                url = next(urlGen)
-                if len(url) == 0:
-                    break
-                website_number += 1
-                website_queue.append((url, website_number))
+            if len(website_queue) < max_connections or len(url) == 0:
+                website_queue.append(url)
             else:
                 current_queue = website_queue
 
-            for website, rank in current_queue:
+            for website in current_queue:
 
                 try:
                     print(
-                        f"Fetching website: max={max_connections}: #={rank}: {website} at {datetime.datetime.now().strftime('%I:%M:%S')}")
+                        f"Fetching website: {website_number}: {website} at {datetime.datetime.now().strftime('%I:%M:%S')}")
 
                     response = requests.get(
                         f"https://api.ssllabs.com/api/v3/analyze?host=https://{website}&all=on&fromCache=on")
 
                     if (response.json()["status"] == "READY"):
-                        output = f'{{"{website}": {{"rank": {rank}, "info": {response.text}}}}}\n'
-                        wf.write(output)
-                        website_queue.remove((website, rank))
+                        wf.write(response.text + '\n')
+                        website_queue.remove(website)
 
                     if (response.json()["status"] == "ERROR"):
-                        output = f'{{"{website}": {{"rank": {rank}, "info": {response.text}}}}}\n'
-                        ef.write(output)
-                        website_queue.remove((website, rank))
+                        website_queue.remove(website)
 
                     max_connections = int(
                         response.headers['X-Max-Assessments']) - 1
@@ -63,15 +56,13 @@ def scrape():
 
 
 def clean_list():
-    with open("combined_websites.json") as d, open("ten_thousand_com.txt") as lst, open("filtered_list.txt", "w+") as nlst:
-        hosts = []
-        bad_hosts = []
+    with open("website_data.json") as d, open("ten_thousand_com.txt") as lst, open("filtered_list.txt", "w+") as nlst:
+        lines = [line.strip() for line in lst.readlines()]
         for line in d.readlines():
             data = json.loads(line)
             host = data["host"].split("https://")[1]
             res = data["endpoints"][0]["statusMessage"]
-            hosts.append(host)
-            if "Unable to connect to the server" in res:
+            if host in lines and "Unable to connect to the server" in res:
                 print(host)
                 bad_hosts.append(host)
 
@@ -84,5 +75,5 @@ def clean_list():
 
 
 if __name__ == '__main__':
-    # clean_list()
-    scrape()
+    clean_list()
+    # scrape()
