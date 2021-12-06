@@ -88,29 +88,30 @@ def get_json_path(directory, data_type=""):
 def aggregate_data():
     website_found = []
     with open("ten_thousand_com.txt") as wf:
-        websites = [[w, False] for w in wf.read().splitlines()][1000:]
+        websites = [[w, False] for w in wf.read().splitlines()]
+        # print(websites[:2])
+        # return
+        with open("website_data.json") as df, open("aggregate_data.json", "w") as agg, open("missing.txt", "w") as m:
+            lines = df.read().splitlines()
+            for index, entry in enumerate(websites):
+                print(index)
+                website, found = entry
+                for line in lines:
+                    data = json.loads(line)
+                    if website in data.keys() and not found:
+                        data[website]["rank"] = index + 1
+                        websites[index][1] = True
+                        if index == 9999:
+                            agg.write(json.dumps(data))
+                        else:
+                            agg.write(json.dumps(data) + ",")
 
-        for path in get_json_path(".", "website"):
-            with path.open() as df, open("aggregate_data.json", "w") as agg, open("missing.txt", "w") as m:
-                lines = df.read().splitlines()
-                for index, entry in enumerate(websites):
-                    website, found = entry
-                    for line in lines:
-                        data = json.loads(line)
-                        if website in data.keys() and not found:
+                    if websites[index][1]:
+                        break
+            for website, found in websites:
+                if not found:
+                    m.write(f"{website}\n")
 
-                            data[website]["rank"] = index + 1001
-                            websites[index][1] = True
-                            if index == 9999:
-                                agg.write(json.dumps(data))
-                            else:
-                                agg.write(json.dumps(data) + ",")
-
-                        if websites[index][1]:
-                            continue
-        for website, found in websites:
-            if not found:
-                m.write(f"{website}\n")
 
 
 if __name__ == '__main__':
