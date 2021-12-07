@@ -16,6 +16,7 @@ ipykernel = "*"
 notebook = "*"
 requests = "*"
 pymongo = "*"
+mongo = "*"
 
 [requires]
 python_version = "3.9"
