@@ -165,12 +165,14 @@ def insertOneToClient(client, data, website):
             {"domain": website, "rank": data[website]["rank"]})
 
 
-def checkIfFound(client, website):
+def checkIfFound(client, website, rank):
     web_collection = client["tls_data"]["websites"]
     certs_collection = client["tls_data"]["certificates"]
     endpoints_collection = client["tls_data"]["endpoints"]
 
     if web_collection.find_one({"domain": website}) != None:
+        web_collection.update_one({"domain": website}, {
+                                  "$set": {'rank': rank}})
         if endpoints_collection.count_documents({"domain": website}) != 0:
             if certs_collection.count_documents({"domain": website}) != 0:
                 return True
@@ -195,7 +197,7 @@ def aggregate_data(client):
                 print(index)
                 website, found = entry
 
-                if checkIfFound(client, website):
+                if checkIfFound(client, website, index+5001):
                     continue
 
                 for line in lines:
@@ -215,10 +217,10 @@ def aggregate_data(client):
                 print(index + 2501)
                 website, found = entry
 
-                if checkIfFound(client, website):
+                if checkIfFound(client, website, index+5001):
                     continue
 
-                for line in lines[2000:]:
+                for line in lines:
                     data = json.loads(line)
                     if website in data.keys() and not found:
                         data[website]["rank"] = index + 2501
@@ -234,9 +236,9 @@ def aggregate_data(client):
                 print(index+5001)
                 website, found = entry
 
-                if checkIfFound(client, website):
+                if checkIfFound(client, website, index+5001):
                     continue
-                for line in lines[4000:]:
+                for line in lines:
                     data = json.loads(line)
                     if website in data.keys() and not found:
                         data[website]["rank"] = index + 5001
@@ -252,12 +254,12 @@ def aggregate_data(client):
                 print(index+7501)
                 website, found = entry
 
-                if checkIfFound(client, website):
+                if checkIfFound(client, website, index+7501):
                     continue
-                for line in lines[6000:]:
+                for line in lines:
                     data = json.loads(line)
                     if website in data.keys() and not found:
-                        data[website]["rank"] = index + 6001
+                        data[website]["rank"] = index + 7501
                         websites[index+7500][1] = True
                         try:
                             insertOneToClient(client, data, website)
@@ -275,7 +277,7 @@ if __name__ == '__main__':
     config = ConfigParser()
     config.read('creds.cfg')
     client = MongoClient(
-        f"mongodb://admin:{config['mongodb']['passwd']}@76.10.62.77:27017")
+        f"mongodb://admin:cosc545mongodbfall2021@76.10.62.77:27017")
     # clean_list()
     # scrape()
     aggregate_data(client)
